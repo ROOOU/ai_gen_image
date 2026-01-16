@@ -9,9 +9,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "NanoPhoto AI - AI 图片生成",
+  title: "AI Photo - AI 图片生成",
   description: "使用 ModelScope 通义万相模型生成高质量 AI 图片",
-  keywords: ["AI", "图片生成", "ModelScope", "NanoPhoto", "通义万相"],
+  keywords: ["AI", "图片生成", "ModelScope", "AI Photo", "通义万相"],
 };
 
 export default function RootLayout({

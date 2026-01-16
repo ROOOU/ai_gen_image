@@ -404,7 +404,7 @@ export default function Home() {
       <header className="header">
         <div className="logo">
           <div className="logo-icon">✨</div>
-          <span>NanoPhoto AI</span>
+          <span>AI Photo</span>
         </div>
 
         <div className="header-right">
@@ -701,7 +701,7 @@ export default function Home() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2 className="modal-title">{isRegister ? '创建账号' : '欢迎回来'}</h2>
             <p className="modal-subtitle">
-              {isRegister ? '注册后获得 100 积分免费体验' : '登录以继续使用 NanoPhoto AI'}
+              {isRegister ? '注册后获得 100 积分免费体验' : '登录以继续使用 AI Photo'}
             </p>
 
             {authError && (
