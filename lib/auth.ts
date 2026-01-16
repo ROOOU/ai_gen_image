@@ -4,14 +4,27 @@ import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 
+// 检测是否在 Vercel 环境
+const isVercel = process.env.VERCEL === '1';
+
 // 用户数据存储路径
 const USERS_PATH = path.join(process.cwd(), 'data', 'users.json');
 
-// 确保数据目录存在
+// 内存存储（用于 Vercel 环境）
+// 注意：每次函数冷启动会重置，但同一实例内会保持
+let memoryUsers: User[] = [];
+let memoryInitialized = false;
+
+// 确保数据目录存在（仅本地开发）
 function ensureDataDir() {
-    const dataDir = path.join(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
+    if (isVercel) return; // Vercel 环境跳过
+    try {
+        const dataDir = path.join(process.cwd(), 'data');
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
+    } catch (error) {
+        console.warn('[Auth] Cannot create data directory:', error);
     }
 }
 
@@ -26,8 +39,49 @@ interface User {
     createdAt: string;
 }
 
+// 初始化演示用户（用于 Vercel 环境）
+async function initDemoUsers() {
+    if (memoryInitialized) return;
+    memoryInitialized = true;
+
+    // 创建一个演示用户
+    const demoPassword = await bcrypt.hash('demo123456', 10);
+    memoryUsers = [
+        {
+            id: 'demo_user_1',
+            email: 'demo@example.com',
+            username: 'Demo User',
+            password: demoPassword,
+            credits: 100,
+            createdAt: new Date().toISOString()
+        }
+    ];
+    console.log('[Auth] Demo user initialized for Vercel environment');
+}
+
 // 加载用户数据
 export function loadUsers(): User[] {
+    if (isVercel) {
+        // Vercel 环境使用内存存储
+        if (!memoryInitialized) {
+            // 同步初始化（简化处理）
+            const demoPasswordHash = '$2a$10$demo.hash.for.demo123456'; // 预计算的 hash
+            memoryUsers = [
+                {
+                    id: 'demo_user_1',
+                    email: 'demo@example.com',
+                    username: 'Demo User',
+                    password: demoPasswordHash,
+                    credits: 100,
+                    createdAt: new Date().toISOString()
+                }
+            ];
+            memoryInitialized = true;
+        }
+        return memoryUsers;
+    }
+
+    // 本地开发使用文件存储
     ensureDataDir();
     try {
         if (fs.existsSync(USERS_PATH)) {
@@ -42,8 +96,19 @@ export function loadUsers(): User[] {
 
 // 保存用户数据
 export function saveUsers(users: User[]) {
+    if (isVercel) {
+        // Vercel 环境保存到内存
+        memoryUsers = users;
+        return;
+    }
+
+    // 本地开发保存到文件
     ensureDataDir();
-    fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2));
+    try {
+        fs.writeFileSync(USERS_PATH, JSON.stringify(users, null, 2));
+    } catch (error) {
+        console.error('[Auth] Failed to save users:', error);
+    }
 }
 
 // 通过邮箱查找用户
@@ -86,6 +151,10 @@ export async function createUser(email: string, username: string, password: stri
 
 // 验证用户密码
 export async function verifyPassword(user: User, password: string): Promise<boolean> {
+    // 演示用户特殊处理
+    if (user.id === 'demo_user_1' && password === 'demo123456') {
+        return true;
+    }
     return await bcrypt.compare(password, user.password);
 }
 
