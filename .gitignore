@@ -39,3 +39,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cookies and session data
+cookies.json
+config.json
+
+# gemini cache
+.gemini_browser/
+.gemini_cache/
+
+# user data (local development only)
+/data/
+
+# generated images
+/public/generated/*
+!/public/generated/.gitkeep
