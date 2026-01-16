@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, deductCredits } from '@/lib/auth';
 import { generateImage, MODELSCOPE_MODELS } from '@/lib/modelscope';
+import { uploadImages, isR2Configured } from '@/lib/r2';
 import fs from 'fs';
 import path from 'path';
 
@@ -19,26 +20,31 @@ function ensureHistoryDir(userId: string) {
 
 // 保存生成记录
 function saveHistory(userId: string, record: any) {
-    const userDir = ensureHistoryDir(userId);
-    const historyFile = path.join(userDir, 'history.json');
+    try {
+        const userDir = ensureHistoryDir(userId);
+        const historyFile = path.join(userDir, 'history.json');
 
-    let history: any[] = [];
-    if (fs.existsSync(historyFile)) {
-        try {
-            history = JSON.parse(fs.readFileSync(historyFile, 'utf-8'));
-        } catch (e) {
-            history = [];
+        let history: any[] = [];
+        if (fs.existsSync(historyFile)) {
+            try {
+                history = JSON.parse(fs.readFileSync(historyFile, 'utf-8'));
+            } catch (e) {
+                history = [];
+            }
         }
+
+        history.unshift(record);
+
+        // 只保留最近 100 条记录
+        if (history.length > 100) {
+            history = history.slice(0, 100);
+        }
+
+        fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
+    } catch (error) {
+        // 在 Vercel 环境中可能无法写入文件，忽略错误
+        console.warn('[History] Failed to save history to file:', error);
     }
-
-    history.unshift(record);
-
-    // 只保留最近 100 条记录
-    if (history.length > 100) {
-        history = history.slice(0, 100);
-    }
-
-    fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
 }
 
 // 每次生成消耗的积分
@@ -79,18 +85,30 @@ export async function POST(request: Request) {
         }
 
         // 使用 ModelScope 生成图片
-        // 如果没有指定模型，使用默认模型
         const modelId = model || MODELSCOPE_MODELS[0].id;
         console.log(`[Generate] 使用 ModelScope, 模型: ${modelId}`);
 
         const result = await generateImage(prompt.trim(), modelId);
 
-        if (result.success) {
+        if (result.success && result.images) {
+            // 上传图片到 R2（如果已配置）
+            const genId = `gen_${Date.now()}`;
+            let processedImages = result.images;
+
+            if (isR2Configured()) {
+                console.log('[Generate] Uploading images to R2...');
+                processedImages = await uploadImages(
+                    result.images,
+                    `${userId}/${genId}`
+                );
+                console.log('[Generate] Images uploaded to R2');
+            }
+
             // 保存历史记录
             saveHistory(userId, {
-                id: `gen_${Date.now()}`,
+                id: genId,
                 prompt: prompt.trim(),
-                images: result.images,
+                images: processedImages,
                 text: result.text,
                 model: modelId,
                 provider: 'modelscope',
@@ -100,11 +118,11 @@ export async function POST(request: Request) {
 
             return NextResponse.json({
                 success: true,
-                images: result.images,
+                images: processedImages,
                 text: result.text
             });
         } else {
-            // 生成失败，可以考虑返还积分
+            // 生成失败
             return NextResponse.json(
                 { success: false, error: result.error || '生成失败' },
                 { status: 500 }
