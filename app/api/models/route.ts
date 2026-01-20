@@ -9,6 +9,8 @@ export interface ModelProvider {
         id: string;
         name: string;
         description?: string;
+        supportsTextToImage?: boolean;
+        supportsImageToImage?: boolean;
     }>;
 }
 
@@ -22,7 +24,9 @@ export async function GET() {
                 models: MODELSCOPE_MODELS.map(m => ({
                     id: m.id,
                     name: m.name,
-                    description: m.description
+                    description: m.description,
+                    supportsTextToImage: (m as any).supportsTextToImage ?? true,
+                    supportsImageToImage: (m as any).supportsImageToImage ?? false
                 }))
             }
         ];

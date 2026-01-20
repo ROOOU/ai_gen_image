@@ -28,17 +28,23 @@ export const MODELSCOPE_MODELS = [
     {
         id: 'Tongyi-MAI/Z-Image-Turbo',
         name: 'Z-Image Turbo',
-        description: '通义万相快速图像生成模型'
+        description: '通义万相快速图像生成模型（文生图）',
+        supportsTextToImage: true,
+        supportsImageToImage: false
     },
     {
-        id: 'AI-ModelScope/stable-diffusion-xl-base-1.0',
-        name: 'SDXL 1.0',
-        description: 'Stable Diffusion XL 基础模型'
+        id: 'Qwen/Qwen-Image-2512',
+        name: 'Qwen-Image-2512',
+        description: '通义千问最新图像生成模型（文生图，高质量写实）',
+        supportsTextToImage: true,
+        supportsImageToImage: false
     },
     {
-        id: 'AI-ModelScope/stable-diffusion-3-medium',
-        name: 'SD3 Medium',
-        description: 'Stable Diffusion 3 中型模型'
+        id: 'Qwen/Qwen-Image-Edit-2511',
+        name: 'Qwen-Image-Edit-2511',
+        description: '通义千问图片编辑模型（仅图生图）',
+        supportsTextToImage: false,
+        supportsImageToImage: true
     }
 ];
 
@@ -112,6 +118,7 @@ export async function generateImage(
         negativePrompt?: string;
         width?: number;
         height?: number;
+        image_url?: string[] | string; // 添加 image_url 支持
     }
 ): Promise<GenerateResult> {
     const config = loadConfig();
@@ -142,7 +149,23 @@ export async function generateImage(
             requestBody.height = options.height;
         }
 
-        console.log('[ModelScope] 提交生成任务:', { model: modelId, prompt });
+        // 处理 image_url 参数
+        if (options?.image_url) {
+            // Qwen-Image-Edit-2511 需要 image_url 字段，且通常为数组
+            // 如果传入的是字符串，尝试转换为数组，或者根据模型要求调整
+            if (Array.isArray(options.image_url)) {
+                requestBody.image_url = options.image_url;
+            } else {
+                requestBody.image_url = [options.image_url];
+            }
+        }
+
+        console.log('[ModelScope] 提交生成任务:', JSON.stringify({
+            model: modelId,
+            prompt: prompt,
+            hasImageUrl: !!requestBody.image_url,
+            imageUrlCount: requestBody.image_url?.length || 0
+        }));
 
         const submitResponse = await fetch(`${config.baseUrl}v1/images/generations`, {
             method: 'POST',
@@ -152,7 +175,11 @@ export async function generateImage(
 
         if (!submitResponse.ok) {
             const errorText = await submitResponse.text();
-            console.error('[ModelScope] 提交任务失败:', errorText);
+            console.error('[ModelScope] 提交任务失败:', {
+                status: submitResponse.status,
+                statusText: submitResponse.statusText,
+                error: errorText
+            });
             return {
                 success: false,
                 error: `提交任务失败: ${submitResponse.status} - ${errorText}`

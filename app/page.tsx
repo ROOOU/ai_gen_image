@@ -67,6 +67,8 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState(0); // 生成进度 0-100
+  const [generatingStatus, setGeneratingStatus] = useState<string>(''); // 生成状态文本
   const [resultImages, setResultImages] = useState<GeneratedImage[]>([]);
   const [resultText, setResultText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -303,6 +305,8 @@ export default function Home() {
     }
 
     setIsGenerating(true);
+    setGeneratingProgress(0);
+    setGeneratingStatus('正在提交任务...');
     setError(null);
     setResultImages([]);
     setResultText(null);
@@ -321,6 +325,7 @@ export default function Home() {
         }));
       }
 
+      // 1. 提交生成任务
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -329,27 +334,97 @@ export default function Home() {
 
       const data = await res.json();
 
-      if (data.success) {
-        // 确保 images 是正确的格式
-        const images = (data.images || []).map((img: GeneratedImage | string) => {
-          if (typeof img === 'string') {
-            return { url: img };
-          }
-          return img;
-        });
-        setResultImages(images);
-        setResultText(data.text || null);
-        setViewMode('preview');
-        setCredits((prev) => prev - 1);
-        fetchHistory();
-      } else if (data.needLogin) {
-        setShowLoginModal(true);
-      } else {
-        setError(data.error || '生成失败');
+      if (!data.success) {
+        if (data.needLogin) {
+          setShowLoginModal(true);
+        } else {
+          setError(data.error || '提交任务失败');
+        }
+        setIsGenerating(false);
+        return;
       }
+
+      const taskId = data.taskId;
+      if (!taskId) {
+        setError('未获取到任务 ID');
+        setIsGenerating(false);
+        return;
+      }
+
+      // 扣除积分（任务已提交成功）
+      setCredits((prev) => prev - 1);
+      setGeneratingStatus('任务已提交，正在排队处理...');
+
+      // 2. 轮询任务状态
+      // 图生图模型需要更长时间，增加轮询次数
+      const isImg2Img = uploadedImages.length > 0;
+      const maxPolls = isImg2Img ? 90 : 60; // 图生图最多轮询 90 次，文生图 60 次
+      const pollInterval = 2000; // 每 2 秒轮询一次
+      const estimatedTime = isImg2Img ? '30-90秒' : '10-30秒';
+
+      for (let i = 0; i < maxPolls; i++) {
+        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+        // 更新进度
+        const progress = Math.min(95, Math.round((i / maxPolls) * 100));
+        setGeneratingProgress(progress);
+
+        // 更新状态提示
+        const elapsedSeconds = (i + 1) * 2;
+        if (elapsedSeconds < 10) {
+          setGeneratingStatus('AI 正在理解您的提示词...');
+        } else if (elapsedSeconds < 30) {
+          setGeneratingStatus('AI 正在生成图像...');
+        } else if (elapsedSeconds < 60) {
+          setGeneratingStatus(isImg2Img ? '正在处理图片编辑...' : '即将完成，请稍候...');
+        } else {
+          setGeneratingStatus('仍在处理中，图生图模型需要更长时间...');
+        }
+
+        const statusRes = await fetch(
+          `/api/generate/status?taskId=${taskId}&prompt=${encodeURIComponent(prompt.trim())}&model=${encodeURIComponent(selectedModel || '')}`
+        );
+        const statusData = await statusRes.json();
+
+        if (statusData.status === 'SUCCEED') {
+          // 生成成功
+          setGeneratingProgress(100);
+          setGeneratingStatus('生成完成！');
+          const images = (statusData.images || []).map((img: GeneratedImage | string) => {
+            if (typeof img === 'string') {
+              return { url: img };
+            }
+            return img;
+          });
+          setResultImages(images);
+          setResultText(`生成耗时: ${Math.round(statusData.timeTaken / 1000)}秒`);
+          setViewMode('preview');
+          fetchHistory();
+          setIsGenerating(false);
+          return;
+        } else if (statusData.status === 'FAILED') {
+          // 区分不同的失败原因给出更友好的提示
+          let errorMsg = statusData.error || '生成失败';
+          if (isImg2Img && errorMsg.includes('超时')) {
+            errorMsg = '图片编辑模型暂时繁忙，请稍后重试。提示：可以尝试使用更简单的提示词。';
+          }
+          setError(errorMsg);
+          setIsGenerating(false);
+          return;
+        }
+        // PENDING 或 PROCESSING，继续轮询
+      }
+
+      // 超过最大轮询次数
+      if (isImg2Img) {
+        setError('图片编辑模型处理超时。这可能是因为模型队列繁忙。您可以：\n1. 稍后重试\n2. 使用更简单的提示词\n3. 缩小参考图片尺寸');
+      } else {
+        setError('生成超时，请稍后重试或在历史记录中查看');
+      }
+      setIsGenerating(false);
+
     } catch (err) {
       setError('生成失败，请重试');
-    } finally {
       setIsGenerating(false);
     }
   };
@@ -632,8 +707,18 @@ export default function Home() {
               isGenerating ? (
                 <div className="generating-state">
                   <div className="loading-spinner" />
-                  <div className="generating-text">正在生成图片...</div>
-                  <div className="generating-hint">这可能需要 10-30 秒</div>
+                  <div className="generating-text">{generatingStatus || '正在生成图片...'}</div>
+                  <div className="generating-progress">
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{ width: `${generatingProgress}%` }} />
+                    </div>
+                    <span className="progress-text">{generatingProgress}%</span>
+                  </div>
+                  <div className="generating-hint">
+                    {activeTab === 'img2img'
+                      ? '图生图模式需要 30-90 秒，请耐心等待'
+                      : '文生图模式需要 10-30 秒'}
+                  </div>
                 </div>
               ) : resultImages.length > 0 ? (
                 <div className="result-container">
@@ -762,6 +847,31 @@ export default function Home() {
                 {authLoading ? '处理中...' : isRegister ? '注册' : '登录'}
               </button>
             </form>
+
+            {/* 分隔线 */}
+            {!isRegister && (
+              <div className="auth-divider">
+                <span>或</span>
+              </div>
+            )}
+
+            {/* Google 登录按钮 */}
+            {!isRegister && (
+              <button
+                type="button"
+                className="google-btn"
+                onClick={() => signIn('google', { callbackUrl: '/' })}
+                disabled={authLoading}
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                <span>使用 Google 账号登录</span>
+              </button>
+            )}
 
             <div className="modal-footer">
               {isRegister ? (

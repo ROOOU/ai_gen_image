@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createUser, findUserByEmail } from '@/lib/auth';
+import { createUser, findUserByEmailAsync } from '@/lib/auth';
 
 export async function POST(request: Request) {
     try {
@@ -30,8 +30,8 @@ export async function POST(request: Request) {
             );
         }
 
-        // 检查邮箱是否已存在
-        const existingUser = findUserByEmail(email);
+        // 检查邮箱是否已存在（使用异步方法确保获取最新数据）
+        const existingUser = await findUserByEmailAsync(email);
         if (existingUser) {
             return NextResponse.json(
                 { error: '该邮箱已被注册' },
