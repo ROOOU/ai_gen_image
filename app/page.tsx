@@ -46,6 +46,35 @@ interface HistoryItem {
 // 最大上传图片数
 const MAX_IMAGES = 14;
 
+// 游客免费试用次数
+const GUEST_FREE_LIMIT = 5;
+
+// 生成或获取游客 ID
+function getGuestId(): string {
+  if (typeof window === 'undefined') return '';
+  let guestId = localStorage.getItem('guestId');
+  if (!guestId) {
+    guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem('guestId', guestId);
+  }
+  return guestId;
+}
+
+// 获取游客已使用次数
+function getGuestUsedCount(): number {
+  if (typeof window === 'undefined') return 0;
+  const count = localStorage.getItem('guestUsedCount');
+  return count ? parseInt(count, 10) : 0;
+}
+
+// 增加游客使用次数
+function incrementGuestUsedCount(): number {
+  if (typeof window === 'undefined') return 0;
+  const count = getGuestUsedCount() + 1;
+  localStorage.setItem('guestUsedCount', count.toString());
+  return count;
+}
+
 export default function Home() {
   const { data: session, status } = useSession();
 
@@ -77,6 +106,10 @@ export default function Home() {
   const [credits, setCredits] = useState(0);
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
+  // 游客模式状态
+  const [guestId, setGuestId] = useState<string>('');
+  const [guestRemaining, setGuestRemaining] = useState<number>(GUEST_FREE_LIMIT);
+
   // 模型选择
   const [providers, setProviders] = useState<ModelProvider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>('modelscope');
@@ -85,6 +118,16 @@ export default function Home() {
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+
+  // 初始化游客 ID
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      const id = getGuestId();
+      setGuestId(id);
+      const used = getGuestUsedCount();
+      setGuestRemaining(Math.max(0, GUEST_FREE_LIMIT - used));
+    }
+  }, [status]);
 
   // 获取用户积分
   const fetchCredits = useCallback(async () => {
@@ -294,14 +337,21 @@ export default function Home() {
       return;
     }
 
-    if (status !== 'authenticated') {
-      setShowLoginModal(true);
-      return;
-    }
+    const isGuest = status !== 'authenticated';
 
-    if (credits < 1) {
-      setError('积分不足，请充值后继续使用');
-      return;
+    // 游客模式检查
+    if (isGuest) {
+      if (guestRemaining <= 0) {
+        setError('游客免费试用次数已用完，请登录获取更多积分');
+        setShowLoginModal(true);
+        return;
+      }
+    } else {
+      // 登录用户检查积分
+      if (credits < 1) {
+        setError('积分不足，请充值后继续使用');
+        return;
+      }
     }
 
     setIsGenerating(true);
@@ -316,6 +366,11 @@ export default function Home() {
         prompt: prompt.trim(),
         model: selectedModel || undefined,
       };
+
+      // 游客模式添加 guestId
+      if (isGuest) {
+        body.guestId = guestId;
+      }
 
       if (uploadedImages.length > 0) {
         body.images = uploadedImages.map((img) => ({
@@ -351,9 +406,20 @@ export default function Home() {
         return;
       }
 
-      // 扣除积分（任务已提交成功）
-      setCredits((prev) => prev - 1);
-      setGeneratingStatus('任务已提交，正在排队处理...');
+      // 处理积分/游客次数（任务已提交成功）
+      if (isGuest) {
+        // 游客模式：更新剩余次数
+        incrementGuestUsedCount();
+        const newRemaining = data.guestRemaining !== undefined
+          ? data.guestRemaining
+          : Math.max(0, guestRemaining - 1);
+        setGuestRemaining(newRemaining);
+        setGeneratingStatus(`任务已提交，正在排队处理...（剩余 ${newRemaining} 次免费试用）`);
+      } else {
+        // 登录用户：扣除积分
+        setCredits((prev) => prev - 1);
+        setGeneratingStatus('任务已提交，正在排队处理...');
+      }
 
       // 2. 轮询任务状态
       // 图生图模型需要更长时间，增加轮询次数
@@ -509,9 +575,17 @@ export default function Home() {
               </div>
             </>
           ) : (
-            <button className="auth-btn" onClick={() => setShowLoginModal(true)}>
-              登录
-            </button>
+            <>
+              <div className="credits-badge guest-badge">
+                <span>🎁</span>
+                <span className="value">{guestRemaining}</span>
+                <span>次免费试用</span>
+              </div>
+              <button className="auth-btn" onClick={() => setShowLoginModal(true)}>
+                登录
+              </button>
+            </>
+
           )}
         </div>
       </header>
@@ -655,12 +729,19 @@ export default function Home() {
           <button
             className="generate-btn"
             onClick={handleGenerate}
-            disabled={isGenerating || !prompt.trim()}
+            disabled={isGenerating || !prompt.trim() || (status !== 'authenticated' && guestRemaining <= 0)}
           >
             {isGenerating ? (
               <>
                 <span className="loading-spinner" style={{ width: 20, height: 20, marginBottom: 0 }} />
                 <span>生成中...</span>
+              </>
+            ) : status !== 'authenticated' ? (
+              <>
+                <span>✨ 生成图片</span>
+                <span className="credit-cost">
+                  {guestRemaining > 0 ? `免费试用 (剩余 ${guestRemaining} 次)` : '请登录'}
+                </span>
               </>
             ) : (
               <>

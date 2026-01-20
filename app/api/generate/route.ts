@@ -7,9 +7,48 @@ import { uploadImage, isR2Configured } from '@/lib/r2';
 // 每次生成消耗的积分
 const CREDITS_PER_GENERATION = 1;
 
+// 游客免费试用次数限制
+const GUEST_FREE_LIMIT = 5;
+
+// 游客使用记录（内存存储，重启会重置）
+// 生产环境可以考虑用 Redis 或 R2 持久化
+const guestUsageMap = new Map<string, { count: number; lastUsed: number }>();
+
+// 清理过期的游客记录（24小时后）
+function cleanupGuestUsage() {
+    const now = Date.now();
+    const expireTime = 24 * 60 * 60 * 1000; // 24小时
+    for (const [guestId, usage] of guestUsageMap.entries()) {
+        if (now - usage.lastUsed > expireTime) {
+            guestUsageMap.delete(guestId);
+        }
+    }
+}
+
+// 检查游客使用次数
+function checkGuestUsage(guestId: string): { allowed: boolean; remaining: number } {
+    cleanupGuestUsage();
+    const usage = guestUsageMap.get(guestId);
+    const count = usage?.count || 0;
+    return {
+        allowed: count < GUEST_FREE_LIMIT,
+        remaining: Math.max(0, GUEST_FREE_LIMIT - count)
+    };
+}
+
+// 记录游客使用
+function recordGuestUsage(guestId: string): number {
+    const usage = guestUsageMap.get(guestId) || { count: 0, lastUsed: 0 };
+    usage.count += 1;
+    usage.lastUsed = Date.now();
+    guestUsageMap.set(guestId, usage);
+    return GUEST_FREE_LIMIT - usage.count;
+}
+
 /**
  * 提交生成任务 - 非阻塞模式
  * 立即返回 task_id，客户端轮询 /api/generate/status 获取结果
+ * 支持游客模式：未登录用户可免费试用5次
  */
 export async function POST(request: Request) {
     try {
@@ -17,17 +56,41 @@ export async function POST(request: Request) {
         const bodyPromise = request.json();
 
         const session = await sessionPromise;
-
-        if (!session?.user) {
-            return NextResponse.json(
-                { success: false, error: '请先登录', needLogin: true },
-                { status: 401 }
-            );
-        }
-
-        const userId = (session.user as any).id;
         const body = await bodyPromise;
-        let { prompt, model, image_url, images } = body;
+        let { prompt, model, image_url, images, guestId } = body;
+
+        // 判断是否为游客模式
+        const isGuest = !session?.user;
+        let userId: string;
+
+        if (isGuest) {
+            // 游客模式：检查是否有 guestId
+            if (!guestId) {
+                return NextResponse.json(
+                    { success: false, error: '请先登录或使用游客模式', needLogin: true },
+                    { status: 401 }
+                );
+            }
+
+            // 检查游客使用次数
+            const { allowed, remaining } = checkGuestUsage(guestId);
+            if (!allowed) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: '游客免费试用次数已用完，请登录获取更多积分',
+                        needLogin: true,
+                        guestLimitReached: true
+                    },
+                    { status: 402 }
+                );
+            }
+
+            userId = `guest_${guestId}`;
+            console.log(`[Generate] Guest mode: ${guestId}, remaining: ${remaining}`);
+        } else {
+            userId = (session.user as any).id;
+        }
 
         // 兼容前端传入的 images 数组
         if (!image_url && images && Array.isArray(images) && images.length > 0) {
@@ -65,13 +128,22 @@ export async function POST(request: Request) {
             );
         }
 
-        // 扣除积分
-        const deducted = await deductCreditsAsync(userId, CREDITS_PER_GENERATION);
-        if (!deducted) {
-            return NextResponse.json(
-                { success: false, error: '积分不足，请充值后继续使用', needCredits: true },
-                { status: 402 }
-            );
+        // 积分/游客次数处理
+        let guestRemaining: number | undefined;
+
+        if (isGuest) {
+            // 游客模式：记录使用次数
+            guestRemaining = recordGuestUsage(guestId);
+            console.log(`[Generate] Guest ${guestId} used, remaining: ${guestRemaining}`);
+        } else {
+            // 登录用户：扣除积分
+            const deducted = await deductCreditsAsync(userId, CREDITS_PER_GENERATION);
+            if (!deducted) {
+                return NextResponse.json(
+                    { success: false, error: '积分不足，请充值后继续使用', needCredits: true },
+                    { status: 402 }
+                );
+            }
         }
 
         const modelId = model || MODELSCOPE_MODELS[0].id;
@@ -128,7 +200,9 @@ export async function POST(request: Request) {
             success: true,
             taskId: taskId,
             status: 'PENDING',
-            message: '任务已提交，请轮询 /api/generate/status?taskId=' + taskId
+            message: '任务已提交，请轮询 /api/generate/status?taskId=' + taskId,
+            isGuest: isGuest,
+            guestRemaining: guestRemaining
         });
 
     } catch (error: any) {
