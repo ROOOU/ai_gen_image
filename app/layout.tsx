@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/components/AuthProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -9,9 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AI Photo - AI 图片生成",
-  description: "使用 ModelScope 通义万相模型生成高质量 AI 图片",
-  keywords: ["AI", "图片生成", "ModelScope", "AI Photo", "通义万相"],
+  title: "Nano Banana - AI 图片生成",
+  description: "使用 Google AI Nano Banana Pro 模型生成高质量 AI 图片",
+  keywords: ["AI", "图片生成", "Nano Banana", "Gemini", "Google AI"],
 };
 
 export default function RootLayout({
@@ -21,9 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className={inter.variable}>
-        <AuthProvider>{children}</AuthProvider>
-      </body>
+      <body className={inter.variable}>{children}</body>
     </html>
   );
 }
