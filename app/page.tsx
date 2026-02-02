@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import OutpaintEditor from '@/components/OutpaintEditor';
+import HistoryPanel from '@/components/HistoryPanel';
 
 // 模型列表
 const MODELS = [
@@ -86,6 +87,9 @@ export default function Home() {
 
   // 扩图状态
   const [outpaintData, setOutpaintData] = useState<OutpaintData | null>(null);
+
+  // 历史记录面板
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -299,6 +303,25 @@ export default function Home() {
       if (data.success) {
         setResultImages(data.images || []);
         setResultText(data.text || null);
+
+        // 保存到历史记录（异步，不阻塞UI）
+        if (data.images && data.images.length > 0) {
+          const historyPrompt = activeTab === 'outpaint'
+            ? (prompt.trim() || '扩展图片')
+            : prompt.trim();
+
+          fetch('/api/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageData: data.images[0].data,
+              prompt: historyPrompt,
+              mode: activeTab,
+              model: selectedModel,
+              aspectRatio: selectedRatio,
+            }),
+          }).catch(err => console.log('保存历史记录失败:', err));
+        }
       } else {
         setError(data.error || '生成失败');
       }
@@ -342,6 +365,12 @@ export default function Home() {
           <span>Nano Banana</span>
         </div>
         <div className="header-right">
+          <button
+            className="history-btn"
+            onClick={() => setIsHistoryOpen(true)}
+          >
+            📜 历史记录
+          </button>
           <a
             href="https://aistudio.google.com/apikey"
             target="_blank"
@@ -641,6 +670,16 @@ export default function Home() {
           </div>
         </main>
       </div>
+
+      {/* 历史记录面板 */}
+      <HistoryPanel
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onSelectItem={(item) => {
+          // 点击历史记录时，在新窗口打开图片
+          window.open(item.imageUrl, '_blank');
+        }}
+      />
     </>
   );
 }
