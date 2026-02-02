@@ -57,6 +57,7 @@ interface GeneratedImage {
 // 扩图合成数据
 interface OutpaintData {
   compositeImage: string;
+  maskImage: string;  // 遮罩图：黑色=保留，白色=生成
   width: number;
   height: number;
 }
@@ -218,9 +219,10 @@ export default function Home() {
   };
 
   // 处理扩图合成数据更新
-  const handleOutpaintComposite = useCallback((compositeData: string, width: number, height: number) => {
+  const handleOutpaintComposite = useCallback((compositeData: string, maskData: string, width: number, height: number) => {
     setOutpaintData({
       compositeImage: compositeData,
+      maskImage: maskData,
       width,
       height,
     });
@@ -257,20 +259,30 @@ export default function Home() {
       };
 
       if (activeTab === 'outpaint') {
-        // 扩图模式：使用更明确的提示词
-        // 关键是告诉 AI 这是一个 inpainting/outpainting 任务
-        const baseInstruction = `This is an image editing task. The image contains a photograph surrounded by gray/neutral colored areas. Your task is to REGENERATE and FILL IN the gray areas with new content that naturally extends the original photograph. The gray areas should be completely replaced with realistic content that seamlessly blends with the original image. Maintain the same style, lighting, perspective, and color palette as the original photograph.`;
+        // 扩图模式：使用遮罩来保护原图区域
+        // 提示词说明：遮罩图中黑色区域是原图（需保留），白色区域需要生成新内容
+        const baseInstruction = `This is an outpainting task with a mask. I'm providing two images:
+1. The first image is the composite with the original photo and gray areas that need to be filled.
+2. The second image is the mask where BLACK areas represent the original image that MUST be preserved EXACTLY as-is, and WHITE areas represent the regions that need to be generated with new content.
+
+CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked areas. Only generate new content in the white masked areas. The new content should seamlessly blend with the original image, matching its style, lighting, perspective, and color palette.`;
 
         const outpaintPrompt = prompt.trim()
-          ? `${baseInstruction} Additional guidance for the extended areas: ${prompt.trim()}`
+          ? `${baseInstruction}\n\nAdditional guidance for the extended areas: ${prompt.trim()}`
           : baseInstruction;
 
-
         requestBody.prompt = outpaintPrompt;
-        requestBody.images = [{
-          data: outpaintData!.compositeImage,
-          mimeType: 'image/jpeg',
-        }];
+        // 发送合成图 + 遮罩图
+        requestBody.images = [
+          {
+            data: outpaintData!.compositeImage,
+            mimeType: 'image/jpeg',
+          },
+          {
+            data: outpaintData!.maskImage,
+            mimeType: 'image/png',
+          },
+        ];
       } else {
         requestBody.prompt = prompt.trim();
         requestBody.aspectRatio = selectedRatio;

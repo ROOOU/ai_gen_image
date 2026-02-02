@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface OutpaintEditorProps {
-    onCompositeReady: (compositeData: string, width: number, height: number) => void;
+    onCompositeReady: (compositeData: string, maskData: string, width: number, height: number) => void;
 }
 
 // 预设扩展选项
@@ -176,7 +176,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
     // Gemini API 最大尺寸限制
     const MAX_API_SIZE = 3072;
 
-    // 生成合成图
+    // 生成合成图和遮罩图
     const generateComposite = useCallback(() => {
         if (!originalImage || !canvasRef.current) return;
 
@@ -194,28 +194,48 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
             finalHeight = Math.round(canvasHeight * scale);
         }
 
-        canvas.width = finalWidth;
-        canvas.height = finalHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // 填充中性灰背景作为需要扩展的区域标识
-        // 使用 #7F7F7F (127,127,127) 中性灰
-        ctx.fillStyle = '#7F7F7F';
-        ctx.fillRect(0, 0, finalWidth, finalHeight);
-
         // 计算原图绘制位置和尺寸（按比例缩放）
         const drawX = imageX * finalWidth;
         const drawY = imageY * finalHeight;
         const drawWidth = originalImage.width * scale;
         const drawHeight = originalImage.height * scale;
 
+        // === 生成合成图（原图 + 灰色背景）===
+        canvas.width = finalWidth;
+        canvas.height = finalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // 填充中性灰背景作为需要扩展的区域标识
+        ctx.fillStyle = '#7F7F7F';
+        ctx.fillRect(0, 0, finalWidth, finalHeight);
+
         // 绘制原图（缩放后）
         ctx.drawImage(originalImage, drawX, drawY, drawWidth, drawHeight);
 
-        // 导出合成图 - 使用 JPEG 格式减少文件大小（避免超过 API 的 7MB 限制）
+        // 导出合成图 - 使用 JPEG 格式减少文件大小
         const compositeData = canvas.toDataURL('image/jpeg', 0.92);
-        onCompositeReady(compositeData, finalWidth, finalHeight);
+
+        // === 生成遮罩图（黑色=保留, 白色=生成）===
+        // 创建临时 canvas 用于遮罩
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = finalWidth;
+        maskCanvas.height = finalHeight;
+        const maskCtx = maskCanvas.getContext('2d');
+        if (!maskCtx) return;
+
+        // 整个画布填充白色（需要生成的区域）
+        maskCtx.fillStyle = '#FFFFFF';
+        maskCtx.fillRect(0, 0, finalWidth, finalHeight);
+
+        // 原图区域填充黑色（需要保留的区域）
+        maskCtx.fillStyle = '#000000';
+        maskCtx.fillRect(drawX, drawY, drawWidth, drawHeight);
+
+        // 导出遮罩图 - 使用 PNG 格式保持精确
+        const maskData = maskCanvas.toDataURL('image/png');
+
+        onCompositeReady(compositeData, maskData, finalWidth, finalHeight);
     }, [originalImage, canvasWidth, canvasHeight, imageX, imageY, onCompositeReady]);
 
     // 当相关参数改变时更新合成图
