@@ -173,8 +173,8 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         }
     }, [isDragging, handleMouseMove, handleMouseUp]);
 
-    // Gemini API 最大尺寸限制（保守值，避免文件过大）
-    const MAX_API_SIZE = 2048;
+    // Gemini API 最大尺寸限制
+    const MAX_API_SIZE = 3072;
 
     // 生成合成图
     const generateComposite = useCallback(() => {

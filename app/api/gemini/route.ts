@@ -56,8 +56,6 @@ export async function POST(request: Request) {
         };
 
         // 设置图片配置
-        // 注意：当有输入图片时，API 会自动匹配输入图片的尺寸
-        // 所以只有纯文生图模式才设置 aspectRatio
         if (!hasInputImages) {
             // 纯文生图模式：使用 aspectRatio 和 imageSize
             if (aspectRatio || imageSize) {
@@ -70,9 +68,13 @@ export async function POST(request: Request) {
                 }
             }
         } else {
-            // 图生图/扩图模式：不设 aspectRatio 和 imageSize
-            // 让 API 自动匹配输入图片的尺寸，避免尺寸冲突导致错误
-            // 注意：设置 imageSize 可能导致 "The string did not match the expected pattern" 错误
+            // 图生图/扩图模式：Pro 模型使用 2K 输出分辨率
+            // 注意：必须使用大写 K (如 "2K" 而非 "2k")
+            if (model === 'gemini-3-pro-image-preview') {
+                generateConfig.imageConfig = {
+                    imageSize: '2K',
+                };
+            }
         }
 
         // 构建内容
