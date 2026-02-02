@@ -70,13 +70,9 @@ export async function POST(request: Request) {
                 }
             }
         } else {
-            // 图生图/扩图模式：不设 aspectRatio，让 API 匹配输入尺寸
-            // 对于 Pro 模型，启用最高分辨率以确保输出质量
-            if (model === 'gemini-3-pro-image-preview') {
-                generateConfig.imageConfig = {
-                    imageSize: '4K', // 确保高分辨率输出
-                };
-            }
+            // 图生图/扩图模式：不设 aspectRatio 和 imageSize
+            // 让 API 自动匹配输入图片的尺寸，避免尺寸冲突导致错误
+            // 注意：设置 imageSize 可能导致 "The string did not match the expected pattern" 错误
         }
 
         // 构建内容
