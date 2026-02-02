@@ -16,9 +16,10 @@ interface HistoryPanelProps {
     isOpen: boolean;
     onClose: () => void;
     onSelectItem: (item: HistoryItem) => void;
+    apiKey: string;  // 用于识别用户
 }
 
-export default function HistoryPanel({ isOpen, onClose, onSelectItem }: HistoryPanelProps) {
+export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: HistoryPanelProps) {
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -26,10 +27,19 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem }: HistoryP
 
     // 加载历史记录
     const loadHistory = async () => {
+        if (!apiKey) {
+            setError('请先设置 API Key 以查看历史记录');
+            return;
+        }
+
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch('/api/history');
+            const response = await fetch('/api/history', {
+                headers: {
+                    'x-api-key': apiKey,
+                },
+            });
             const data = await response.json();
             if (data.success) {
                 setHistory(data.history);
@@ -46,12 +56,15 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem }: HistoryP
     // 删除记录
     const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (deletingId) return;
+        if (deletingId || !apiKey) return;
 
         setDeletingId(id);
         try {
             const response = await fetch(`/api/history?id=${id}`, {
                 method: 'DELETE',
+                headers: {
+                    'x-api-key': apiKey,
+                },
             });
             const data = await response.json();
             if (data.success) {
@@ -98,7 +111,7 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem }: HistoryP
         if (isOpen) {
             loadHistory();
         }
-    }, [isOpen]);
+    }, [isOpen, apiKey]);
 
     if (!isOpen) return null;
 

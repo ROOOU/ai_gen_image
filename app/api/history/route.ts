@@ -6,14 +6,18 @@ import {
     deleteHistoryItem,
     uploadImage,
     getImageUrl,
+    getUserIdFromApiKey,
     HistoryItem,
 } from '@/lib/r2';
 
 /**
  * GET /api/history
  * 获取历史记录列表
+ * 
+ * Headers:
+ * - x-api-key: 用户的 API Key（用于区分不同用户的历史记录）
  */
-export async function GET() {
+export async function GET(request: Request) {
     try {
         if (!isR2Configured()) {
             return NextResponse.json({
@@ -22,7 +26,11 @@ export async function GET() {
             }, { status: 500 });
         }
 
-        const history = await loadHistory();
+        // 从请求头获取 API Key，生成用户 ID
+        const apiKey = request.headers.get('x-api-key') || '';
+        const userId = getUserIdFromApiKey(apiKey);
+
+        const history = await loadHistory(userId);
 
         // 为每个记录添加图片 URL
         const historyWithUrls = history.map(item => ({
@@ -47,6 +55,9 @@ export async function GET() {
  * POST /api/history
  * 添加新的历史记录
  * 
+ * Headers:
+ * - x-api-key: 用户的 API Key（用于区分不同用户的历史记录）
+ * 
  * Body:
  * - imageData: string (base64 data URL)
  * - prompt: string
@@ -63,6 +74,10 @@ export async function POST(request: Request) {
             }, { status: 500 });
         }
 
+        // 从请求头获取 API Key，生成用户 ID
+        const apiKey = request.headers.get('x-api-key') || '';
+        const userId = getUserIdFromApiKey(apiKey);
+
         const body = await request.json();
         const { imageData, prompt, mode, model, aspectRatio } = body;
 
@@ -76,8 +91,8 @@ export async function POST(request: Request) {
         // 生成唯一 ID
         const id = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-        // 上传图片到 R2
-        const imageKey = await uploadImage(imageData, id);
+        // 上传图片到 R2（按用户存储）
+        const imageKey = await uploadImage(imageData, id, userId);
 
         // 创建历史记录项
         const historyItem: HistoryItem = {
@@ -90,8 +105,8 @@ export async function POST(request: Request) {
             aspectRatio,
         };
 
-        // 保存到历史
-        const success = await addHistoryItem(historyItem);
+        // 保存到用户的历史记录
+        const success = await addHistoryItem(userId, historyItem);
 
         if (success) {
             return NextResponse.json({
@@ -119,6 +134,9 @@ export async function POST(request: Request) {
 /**
  * DELETE /api/history?id=xxx
  * 删除历史记录
+ * 
+ * Headers:
+ * - x-api-key: 用户的 API Key（用于区分不同用户的历史记录）
  */
 export async function DELETE(request: Request) {
     try {
@@ -128,6 +146,10 @@ export async function DELETE(request: Request) {
                 error: 'R2 存储未配置',
             }, { status: 500 });
         }
+
+        // 从请求头获取 API Key，生成用户 ID
+        const apiKey = request.headers.get('x-api-key') || '';
+        const userId = getUserIdFromApiKey(apiKey);
 
         const { searchParams } = new URL(request.url);
         const id = searchParams.get('id');
@@ -139,7 +161,7 @@ export async function DELETE(request: Request) {
             }, { status: 400 });
         }
 
-        const success = await deleteHistoryItem(id);
+        const success = await deleteHistoryItem(userId, id);
 
         if (success) {
             return NextResponse.json({ success: true });

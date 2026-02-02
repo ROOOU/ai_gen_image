@@ -1,4 +1,5 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { createHash } from 'crypto';
 
 // R2 配置
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
@@ -28,8 +29,29 @@ export interface HistoryItem {
     aspectRatio?: string;
 }
 
-// 历史记录文件路径
-const HISTORY_FILE_KEY = 'history/history.json';
+/**
+ * 根据 API Key 生成用户 ID（SHA-256 哈希，取前 16 位）
+ * 这样可以保护用户的 API Key 不被存储
+ */
+export function getUserIdFromApiKey(apiKey: string): string {
+    if (!apiKey) return 'anonymous';
+    const hash = createHash('sha256').update(apiKey).digest('hex');
+    return hash.substring(0, 16);
+}
+
+/**
+ * 获取用户专属的历史记录文件路径
+ */
+function getHistoryFileKey(userId: string): string {
+    return `history/${userId}/history.json`;
+}
+
+/**
+ * 获取用户专属的图片存储路径
+ */
+function getImageKey(userId: string, imageId: string): string {
+    return `images/${userId}/${imageId}.jpg`;
+}
 
 /**
  * 检查 R2 是否已配置
@@ -39,18 +61,19 @@ export function isR2Configured(): boolean {
 }
 
 /**
- * 上传图片到 R2
+ * 上传图片到 R2（按用户存储）
  */
 export async function uploadImage(
     imageData: string,
     imageId: string,
-    mimeType: string = 'image/png'
+    userId: string,
+    mimeType: string = 'image/jpeg'
 ): Promise<string> {
     // 从 base64 data URL 提取数据
     const base64Data = imageData.replace(/^data:[^;]+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
-    const key = `images/${imageId}.png`;
+    const key = getImageKey(userId, imageId);
 
     await s3Client.send(new PutObjectCommand({
         Bucket: R2_BUCKET_NAME,
@@ -114,13 +137,14 @@ export async function deleteImage(imageKey: string): Promise<boolean> {
 }
 
 /**
- * 读取历史记录
+ * 读取用户的历史记录
  */
-export async function loadHistory(): Promise<HistoryItem[]> {
+export async function loadHistory(userId: string): Promise<HistoryItem[]> {
     try {
+        const historyFileKey = getHistoryFileKey(userId);
         const response = await s3Client.send(new GetObjectCommand({
             Bucket: R2_BUCKET_NAME,
-            Key: HISTORY_FILE_KEY,
+            Key: historyFileKey,
         }));
 
         if (response.Body) {
@@ -139,13 +163,14 @@ export async function loadHistory(): Promise<HistoryItem[]> {
 }
 
 /**
- * 保存历史记录
+ * 保存用户的历史记录
  */
-export async function saveHistory(history: HistoryItem[]): Promise<boolean> {
+export async function saveHistory(userId: string, history: HistoryItem[]): Promise<boolean> {
     try {
+        const historyFileKey = getHistoryFileKey(userId);
         await s3Client.send(new PutObjectCommand({
             Bucket: R2_BUCKET_NAME,
-            Key: HISTORY_FILE_KEY,
+            Key: historyFileKey,
             Body: JSON.stringify(history, null, 2),
             ContentType: 'application/json',
         }));
@@ -159,14 +184,14 @@ export async function saveHistory(history: HistoryItem[]): Promise<boolean> {
 /**
  * 添加历史记录项
  */
-export async function addHistoryItem(item: HistoryItem): Promise<boolean> {
+export async function addHistoryItem(userId: string, item: HistoryItem): Promise<boolean> {
     try {
-        const history = await loadHistory();
+        const history = await loadHistory(userId);
         // 添加到开头（最新的在前）
         history.unshift(item);
         // 限制保存最近 100 条记录
         const trimmedHistory = history.slice(0, 100);
-        return await saveHistory(trimmedHistory);
+        return await saveHistory(userId, trimmedHistory);
     } catch (error) {
         console.error('Error adding history item:', error);
         return false;
@@ -176,9 +201,9 @@ export async function addHistoryItem(item: HistoryItem): Promise<boolean> {
 /**
  * 删除历史记录项
  */
-export async function deleteHistoryItem(id: string): Promise<boolean> {
+export async function deleteHistoryItem(userId: string, id: string): Promise<boolean> {
     try {
-        const history = await loadHistory();
+        const history = await loadHistory(userId);
         const item = history.find(h => h.id === id);
 
         if (item) {
@@ -187,7 +212,7 @@ export async function deleteHistoryItem(id: string): Promise<boolean> {
 
             // 从历史中移除
             const newHistory = history.filter(h => h.id !== id);
-            return await saveHistory(newHistory);
+            return await saveHistory(userId, newHistory);
         }
         return false;
     } catch (error) {

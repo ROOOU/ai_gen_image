@@ -312,7 +312,10 @@ export default function Home() {
 
           fetch('/api/history', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': apiKey.trim(),
+            },
             body: JSON.stringify({
               imageData: data.images[0].data,
               prompt: historyPrompt,
@@ -679,6 +682,7 @@ export default function Home() {
           // 点击历史记录时，在新窗口打开图片
           window.open(item.imageUrl, '_blank');
         }}
+        apiKey={apiKey}
       />
     </>
   );
