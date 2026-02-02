@@ -173,8 +173,8 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         }
     }, [isDragging, handleMouseMove, handleMouseUp]);
 
-    // Gemini API 最大尺寸限制
-    const MAX_API_SIZE = 3072;
+    // Gemini API 最大尺寸限制（保守值，避免文件过大）
+    const MAX_API_SIZE = 2048;
 
     // 生成合成图
     const generateComposite = useCallback(() => {
@@ -199,8 +199,9 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // 填充灰色背景作为需要扩展的区域标识
-        ctx.fillStyle = '#808080';
+        // 填充中性灰背景作为需要扩展的区域标识
+        // 使用 #7F7F7F (127,127,127) 中性灰
+        ctx.fillStyle = '#7F7F7F';
         ctx.fillRect(0, 0, finalWidth, finalHeight);
 
         // 计算原图绘制位置和尺寸（按比例缩放）
@@ -212,8 +213,8 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         // 绘制原图（缩放后）
         ctx.drawImage(originalImage, drawX, drawY, drawWidth, drawHeight);
 
-        // 导出合成图
-        const compositeData = canvas.toDataURL('image/png', 1.0);
+        // 导出合成图 - 使用 JPEG 格式减少文件大小（避免超过 API 的 7MB 限制）
+        const compositeData = canvas.toDataURL('image/jpeg', 0.92);
         onCompositeReady(compositeData, finalWidth, finalHeight);
     }, [originalImage, canvasWidth, canvasHeight, imageX, imageY, onCompositeReady]);
 

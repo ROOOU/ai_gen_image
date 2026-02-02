@@ -269,7 +269,7 @@ export default function Home() {
         requestBody.prompt = outpaintPrompt;
         requestBody.images = [{
           data: outpaintData!.compositeImage,
-          mimeType: 'image/png',
+          mimeType: 'image/jpeg',
         }];
       } else {
         requestBody.prompt = prompt.trim();
