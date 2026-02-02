@@ -956,6 +956,12 @@ body {
   padding: 8px;
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+
+.size-warning {
+  color: #f59e0b;
+  font-size: 11px;
 }
 
 /* 自定义尺寸输入 */

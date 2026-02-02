@@ -173,30 +173,48 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         }
     }, [isDragging, handleMouseMove, handleMouseUp]);
 
+    // Gemini API 最大尺寸限制
+    const MAX_API_SIZE = 3072;
+
     // 生成合成图
     const generateComposite = useCallback(() => {
         if (!originalImage || !canvasRef.current) return;
 
         const canvas = canvasRef.current;
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
+
+        // 检查是否需要缩放以适应 API 限制
+        let finalWidth = canvasWidth;
+        let finalHeight = canvasHeight;
+        let scale = 1;
+
+        if (canvasWidth > MAX_API_SIZE || canvasHeight > MAX_API_SIZE) {
+            // 需要缩放
+            scale = Math.min(MAX_API_SIZE / canvasWidth, MAX_API_SIZE / canvasHeight);
+            finalWidth = Math.round(canvasWidth * scale);
+            finalHeight = Math.round(canvasHeight * scale);
+        }
+
+        canvas.width = finalWidth;
+        canvas.height = finalHeight;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
         // 填充灰色背景作为需要扩展的区域标识
         ctx.fillStyle = '#808080';
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.fillRect(0, 0, finalWidth, finalHeight);
 
-        // 计算原图绘制位置（保持原图原始尺寸）
-        const drawX = imageX * canvasWidth;
-        const drawY = imageY * canvasHeight;
+        // 计算原图绘制位置和尺寸（按比例缩放）
+        const drawX = imageX * finalWidth;
+        const drawY = imageY * finalHeight;
+        const drawWidth = originalImage.width * scale;
+        const drawHeight = originalImage.height * scale;
 
-        // 绘制原图（保持原始尺寸）
-        ctx.drawImage(originalImage, drawX, drawY, originalImage.width, originalImage.height);
+        // 绘制原图（缩放后）
+        ctx.drawImage(originalImage, drawX, drawY, drawWidth, drawHeight);
 
         // 导出合成图
         const compositeData = canvas.toDataURL('image/png', 1.0);
-        onCompositeReady(compositeData, canvasWidth, canvasHeight);
+        onCompositeReady(compositeData, finalWidth, finalHeight);
     }, [originalImage, canvasWidth, canvasHeight, imageX, imageY, onCompositeReady]);
 
     // 当相关参数改变时更新合成图
@@ -359,6 +377,11 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                         <span>原图: {originalImage.width} × {originalImage.height}</span>
                         <span>→</span>
                         <span>目标: {canvasWidth} × {canvasHeight}</span>
+                        {(canvasWidth > MAX_API_SIZE || canvasHeight > MAX_API_SIZE) && (
+                            <span className="size-warning">
+                                (API限制，实际: {Math.round(canvasWidth * Math.min(MAX_API_SIZE / canvasWidth, MAX_API_SIZE / canvasHeight))} × {Math.round(canvasHeight * Math.min(MAX_API_SIZE / canvasWidth, MAX_API_SIZE / canvasHeight))})
+                            </span>
+                        )}
                     </div>
 
                     {/* 更换图片按钮 */}
