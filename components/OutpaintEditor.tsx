@@ -3,7 +3,20 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface OutpaintEditorProps {
-    onCompositeReady: (compositeData: string, maskData: string, width: number, height: number) => void;
+    onCompositeReady: (data: {
+        compositeImage: string;
+        maskImage: string;
+        originalImage: string;
+        originalX: number;
+        originalY: number;
+        originalWidth: number;
+        originalHeight: number;
+        width: number;
+        height: number;
+        targetWidth: number;
+        targetHeight: number;
+        scale: number;
+    }) => void;
 }
 
 // 预设扩展选项
@@ -235,8 +248,22 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         // 导出遮罩图 - 使用 PNG 格式保持精确
         const maskData = maskCanvas.toDataURL('image/png');
 
-        onCompositeReady(compositeData, maskData, finalWidth, finalHeight);
-    }, [originalImage, canvasWidth, canvasHeight, imageX, imageY, onCompositeReady]);
+        // 回调传递完整数据
+        onCompositeReady({
+            compositeImage: compositeData,
+            maskImage: maskData,
+            originalImage: originalDataUrl,
+            originalX: imageX,
+            originalY: imageY,
+            originalWidth: originalImage.width,
+            originalHeight: originalImage.height,
+            width: finalWidth,
+            height: finalHeight,
+            targetWidth: canvasWidth,  // 用户期望的目标尺寸
+            targetHeight: canvasHeight,
+            scale: scale,  // 缩放因子
+        });
+    }, [originalImage, originalDataUrl, canvasWidth, canvasHeight, imageX, imageY, onCompositeReady]);
 
     // 当相关参数改变时更新合成图
     useEffect(() => {

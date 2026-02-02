@@ -58,8 +58,16 @@ interface GeneratedImage {
 interface OutpaintData {
   compositeImage: string;
   maskImage: string;  // 遮罩图：黑色=保留，白色=生成
-  width: number;
-  height: number;
+  originalImage: string;  // 原图数据用于后处理
+  originalX: number;  // 原图在画布上的 X 位置比例 (0-1)
+  originalY: number;  // 原图在画布上的 Y 位置比例 (0-1)
+  originalWidth: number;  // 原图原始宽度
+  originalHeight: number;  // 原图原始高度
+  width: number;  // 发送给 API 的宽度（可能被缩放）
+  height: number;  // 发送给 API 的高度（可能被缩放）
+  targetWidth: number;  // 用户期望的目标宽度
+  targetHeight: number;  // 用户期望的目标高度
+  scale: number;  // 缩放因子（1 = 无缩放）
 }
 
 // 最大上传图片数
@@ -219,13 +227,8 @@ export default function Home() {
   };
 
   // 处理扩图合成数据更新
-  const handleOutpaintComposite = useCallback((compositeData: string, maskData: string, width: number, height: number) => {
-    setOutpaintData({
-      compositeImage: compositeData,
-      maskImage: maskData,
-      width,
-      height,
-    });
+  const handleOutpaintComposite = useCallback((data: OutpaintData) => {
+    setOutpaintData(data);
   }, []);
 
   // 生成图片
@@ -313,11 +316,27 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
       const data = await res.json();
 
       if (data.success) {
-        setResultImages(data.images || []);
+        let finalImages = data.images || [];
+
+        // 扩图模式：后处理合成，确保原图区域完全保留
+        if (activeTab === 'outpaint' && outpaintData && finalImages.length > 0) {
+          try {
+            const processedImage = await postProcessOutpaint(
+              finalImages[0].data,
+              outpaintData
+            );
+            finalImages = [{ data: processedImage, mimeType: 'image/jpeg' }];
+          } catch (err) {
+            console.error('扩图后处理失败:', err);
+            // 后处理失败时使用原始结果
+          }
+        }
+
+        setResultImages(finalImages);
         setResultText(data.text || null);
 
         // 保存到历史记录（异步，不阻塞UI）
-        if (data.images && data.images.length > 0) {
+        if (finalImages.length > 0) {
           const historyPrompt = activeTab === 'outpaint'
             ? (prompt.trim() || '扩展图片')
             : prompt.trim();
@@ -329,7 +348,7 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
               'x-api-key': apiKey.trim(),
             },
             body: JSON.stringify({
-              imageData: data.images[0].data,
+              imageData: finalImages[0].data,
               prompt: historyPrompt,
               mode: activeTab,
               model: selectedModel,
@@ -345,6 +364,59 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // 扩图后处理：将 AI 生成的结果与原图合成到目标分辨率
+  const postProcessOutpaint = (
+    aiResultData: string,
+    outpaint: OutpaintData
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // 加载 AI 生成的图片
+      const aiImg = new Image();
+      aiImg.onload = () => {
+        // 加载原图
+        const origImg = new Image();
+        origImg.onload = () => {
+          // 使用用户期望的目标尺寸作为输出
+          const targetW = outpaint.targetWidth;
+          const targetH = outpaint.targetHeight;
+
+          // 创建目标画布
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('无法创建画布'));
+            return;
+          }
+
+          // 第一步：绘制 AI 生成的图片（拉伸到目标尺寸）
+          // AI 返回的图片可能是任意尺寸，我们需要将其拉伸到目标尺寸
+          ctx.drawImage(aiImg, 0, 0, targetW, targetH);
+
+          // 第二步：在原图位置绘制原图（覆盖 AI 生成的对应区域）
+          // originalX/Y 是相对位置（0-1），转换为目标画布上的像素位置
+          const drawX = outpaint.originalX * targetW;
+          const drawY = outpaint.originalY * targetH;
+
+          // 原图在目标画布上的尺寸：使用原始尺寸（不缩放）
+          const drawWidth = outpaint.originalWidth;
+          const drawHeight = outpaint.originalHeight;
+
+          // 绘制原图，完全覆盖 AI 生成的对应区域
+          ctx.drawImage(origImg, drawX, drawY, drawWidth, drawHeight);
+
+          // 导出最终图片
+          resolve(canvas.toDataURL('image/jpeg', 0.95));
+        };
+        origImg.onerror = () => reject(new Error('加载原图失败'));
+        origImg.src = outpaint.originalImage;
+      };
+      aiImg.onerror = () => reject(new Error('加载 AI 结果失败'));
+      aiImg.src = aiResultData;
+    });
   };
 
   // 下载图片
