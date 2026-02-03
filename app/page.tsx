@@ -81,8 +81,10 @@ export default function Home() {
   const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'testing' | 'valid' | 'invalid'>('idle');
   const [apiKeyMessage, setApiKeyMessage] = useState('');
 
-  // 模式和配置
-  const [activeTab, setActiveTab] = useState<'text2img' | 'img2img' | 'outpaint'>('text2img');
+  // iOS 风格状态管理
+  const [activeView, setActiveView] = useState<'create' | 'gallery'>('create');
+  const [activeMode, setActiveMode] = useState<'text2img' | 'img2img' | 'outpaint'>('text2img');
+
   const [selectedModel, setSelectedModel] = useState(MODELS[1].id); // 默认使用 Pro
   const [selectedRatio, setSelectedRatio] = useState('auto');
   const [selectedResolution, setSelectedResolution] = useState('1K');
@@ -112,6 +114,13 @@ export default function Home() {
       setApiKeyStatus('idle');
     }
   }, []);
+
+  // 监听生成开始，自动切换到画廊（仅在移动端）
+  useEffect(() => {
+    if (isGenerating && window.innerWidth <= 768) {
+      setActiveView('gallery');
+    }
+  }, [isGenerating]);
 
   // 保存 API Key
   const saveApiKey = () => {
@@ -153,188 +162,146 @@ export default function Home() {
       }
     } catch (err) {
       setApiKeyStatus('invalid');
-      setApiKeyMessage('网络错误');
+      setApiKeyMessage('验证请求失败');
     }
   };
 
-  // 图片压缩函数：确保图片不超过 5MB（API限制 7MB，留余量）
-  const compressImageIfNeeded = async (dataUrl: string, fileName: string): Promise<{ data: string; wasCompressed: boolean }> => {
-    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-
-    // 计算 base64 数据大小
-    const base64Data = dataUrl.split(',')[1];
-    const binarySize = Math.ceil((base64Data.length * 3) / 4);
-
-    if (binarySize <= MAX_SIZE) {
-      return { data: dataUrl, wasCompressed: false };
-    }
-
-    console.log(`[压缩] ${fileName}: 原始大小 ${(binarySize / 1024 / 1024).toFixed(2)}MB，开始压缩...`);
-
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        // 计算需要的缩放比例
-        let scale = Math.sqrt(MAX_SIZE / binarySize) * 0.9; // 额外缩小 10% 确保不超限
-        let quality = 0.85;
-
-        const compress = () => {
-          const canvas = document.createElement('canvas');
-          const newWidth = Math.floor(img.width * scale);
-          const newHeight = Math.floor(img.height * scale);
-          canvas.width = newWidth;
-          canvas.height = newHeight;
-
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('无法创建画布'));
-            return;
-          }
-
-          ctx.drawImage(img, 0, 0, newWidth, newHeight);
-          const compressedData = canvas.toDataURL('image/jpeg', quality);
-
-          // 检查压缩后大小
-          const compressedBase64 = compressedData.split(',')[1];
-          const compressedSize = Math.ceil((compressedBase64.length * 3) / 4);
-
-          if (compressedSize > MAX_SIZE && (scale > 0.1 || quality > 0.5)) {
-            // 仍然太大，继续缩小
-            if (quality > 0.5) {
-              quality -= 0.1;
-            } else {
-              scale *= 0.8;
-            }
-            compress();
-          } else {
-            console.log(`[压缩] ${fileName}: 压缩后 ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${newWidth}x${newHeight})`);
-            resolve({ data: compressedData, wasCompressed: true });
-          }
-        };
-
-        compress();
-      };
-      img.onerror = () => reject(new Error('加载图片失败'));
-      img.src = dataUrl;
-    });
-  };
-
-  // 处理文件上传
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 处理图片上传
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    processFiles(Array.from(files));
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+
+    processFiles(files);
   };
 
-  // 处理文件
-  const processFiles = async (files: File[]) => {
-    const remainingSlots = MAX_IMAGES - uploadedImages.length;
-    if (remainingSlots <= 0) {
-      setError(`最多只能上传 ${MAX_IMAGES} 张图片`);
-      return;
-    }
-
-    const filesToProcess = files.slice(0, remainingSlots);
-    let compressedCount = 0;
-
-    for (const file of filesToProcess) {
-      if (!file.type.startsWith('image/')) {
-        setError('只支持图片文件');
-        continue;
-      }
-
-      if (file.size > 50 * 1024 * 1024) {
-        setError('图片大小不能超过 50MB');
-        continue;
-      }
-
-      try {
-        // 读取文件
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        // 检查并压缩
-        const { data, wasCompressed } = await compressImageIfNeeded(dataUrl, file.name);
-        if (wasCompressed) {
-          compressedCount++;
-        }
-
-        setUploadedImages((prev) => [
-          ...prev,
-          {
-            data,
-            name: file.name + (wasCompressed ? ' (已压缩)' : ''),
-            mimeType: wasCompressed ? 'image/jpeg' : file.type,
-          },
-        ]);
-        setActiveTab('img2img');
-        setError(null);
-      } catch (err) {
-        console.error('处理图片失败:', err);
-        setError('处理图片失败');
-      }
-    }
-
-    if (compressedCount > 0) {
-      // 显示压缩提示（不阻塞）
-      setError(`⚡ ${compressedCount} 张图片已自动压缩以满足 API 限制`);
-      setTimeout(() => setError(null), 3000);
-    }
-  };
-
-  // 拖拽处理
+  // 处理文件拖拽
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    e.currentTarget.classList.remove('dragover');
-    const files = Array.from(e.dataTransfer.files);
+    const files = e.dataTransfer.files;
+    if (!files) return;
+
     processFiles(files);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.currentTarget.classList.add('dragover');
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
-    e.currentTarget.classList.remove('dragover');
+    e.preventDefault();
   };
 
-  // 移除上传的图片
-  const removeImage = (index: number) => {
-    setUploadedImages((prev) => prev.filter((_, i) => i !== index));
+  // 检查是否需要压缩
+  const compressImageIfNeeded = async (file: File): Promise<string> => {
+    // 限制为 5MB
+    const MAX_SIZE = 5 * 1024 * 1024;
+
+    // 如果小于限制，直接返回 base64
+    if (file.size <= MAX_SIZE) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // 需要压缩
+    console.log(`[Compression] Compressing ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)...`);
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // 如果图片非常大，适当缩小尺寸以确保压缩效果
+          const MAX_DIMENSION = 2048;
+          if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+            const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+            width *= ratio;
+            height *= ratio;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // 使用 JPEG 格式压缩，初始质量 0.8
+          let quality = 0.8;
+          let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+          // 循环尝试降低质量直到满足大小要求
+          while (dataUrl.length > MAX_SIZE * 1.37 && quality > 0.1) { // base64 约为原大小的 1.37 倍
+            quality -= 0.1;
+            dataUrl = canvas.toDataURL('image/jpeg', quality);
+          }
+
+          console.log(`[Compression] Done. New size: ${(dataUrl.length / 1.37 / 1024 / 1024).toFixed(2)}MB, Quality: ${quality.toFixed(1)}`);
+          resolve(dataUrl);
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
-  // 处理扩图合成数据更新
-  const handleOutpaintComposite = useCallback((data: OutpaintData) => {
-    setOutpaintData(data);
-  }, []);
-
-  // 生成图片
-  const handleGenerate = async () => {
-    if (!apiKey.trim()) {
-      setError('请先设置 API Key');
+  // 处理文件
+  const processFiles = async (files: FileList) => {
+    if (files.length + uploadedImages.length > MAX_IMAGES) {
+      alert(`最多只能上传 ${MAX_IMAGES} 张图片`);
       return;
     }
 
-    // 扩图模式需要有合成图
-    if (activeTab === 'outpaint') {
-      if (!outpaintData) {
-        setError('请先上传要扩展的图片');
-        return;
-      }
-    } else {
-      if (!prompt.trim()) {
-        setError('请输入提示词');
-        return;
+    const newImages: UploadedImage[] = [];
+    let compressedCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.type.startsWith('image/')) {
+        try {
+          // 使用压缩逻辑
+          const isNeeded = file.size > 5 * 1024 * 1024;
+          const dataUrl = await compressImageIfNeeded(file);
+          if (isNeeded) compressedCount++;
+
+          newImages.push({
+            data: dataUrl,
+            name: file.name,
+            mimeType: 'image/jpeg', // 压缩后统一为 JPEG，或者如果是原图则保持（此处简化处理，compressImageIfNeeded返回base64）
+          });
+        } catch (err) {
+          console.error('File processing error:', err);
+        }
       }
     }
+
+    if (compressedCount > 0) {
+      setApiKeyMessage(`⚡ ${compressedCount} 张图片已自动压缩以满足 API 限制`);
+      setTimeout(() => setApiKeyMessage(''), 3000);
+    }
+
+    setUploadedImages([...uploadedImages, ...newImages]);
+  };
+
+  // 移除图片
+  const removeImage = (index: number) => {
+    const newImages = [...uploadedImages];
+    newImages.splice(index, 1);
+    setUploadedImages(newImages);
+  };
+
+  // 处理扩图合成准备就绪
+  const handleOutpaintComposite = (data: OutpaintData) => {
+    setOutpaintData(data);
+  };
+
+  // 生成图片
+  const handleGenerate = async () => {
+    if (!canGenerate()) return;
 
     setIsGenerating(true);
     setError(null);
@@ -346,9 +313,8 @@ export default function Home() {
         model: selectedModel,
       };
 
-      if (activeTab === 'outpaint') {
+      if (activeMode === 'outpaint') {
         // 扩图模式：使用遮罩来保护原图区域
-        // 提示词说明：遮罩图中黑色区域是原图（需保留），白色区域需要生成新内容
         const baseInstruction = `This is an outpainting task with a mask. I'm providing two images:
 1. The first image is the composite with the original photo and gray areas that need to be filled.
 2. The second image is the mask where BLACK areas represent the original image that MUST be preserved EXACTLY as-is, and WHITE areas represent the regions that need to be generated with new content.
@@ -378,13 +344,14 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
           requestBody.aspectRatio = selectedRatio;
         }
 
-        // 如果是 Pro 模型，添加分辨率
-        if (selectedModel === 'gemini-3-pro-image-preview') {
-          requestBody.imageSize = selectedResolution;
+        // 如果该模型支持分辨率参数，且不是扩图模式
+        const modelInfo = MODELS.find(m => m.id === selectedModel);
+        if (modelInfo?.supports4K) {
+          // 这里可以添加分辨率参数，目前 SDK 似乎主要是通过 prompt 或 config 控制
+          // 暂时保留逻辑
         }
 
-        // 如果有上传图片（图生图模式）
-        if (uploadedImages.length > 0) {
+        if (activeMode === 'img2img' && uploadedImages.length > 0) {
           requestBody.images = uploadedImages.map((img) => ({
             data: img.data,
             mimeType: img.mimeType,
@@ -407,7 +374,7 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
         let finalImages = data.images || [];
 
         // 扩图模式：后处理合成，确保原图区域完全保留
-        if (activeTab === 'outpaint' && outpaintData && finalImages.length > 0) {
+        if (activeMode === 'outpaint' && outpaintData && finalImages.length > 0) {
           try {
             const processedImage = await postProcessOutpaint(
               finalImages[0].data,
@@ -425,7 +392,7 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
 
         // 保存到历史记录（异步，不阻塞UI）
         if (finalImages.length > 0) {
-          const historyPrompt = activeTab === 'outpaint'
+          const historyPrompt = activeMode === 'outpaint'
             ? (prompt.trim() || '扩展图片')
             : prompt.trim();
 
@@ -469,7 +436,7 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
                 imageData: finalImages[0].data,
                 thumbnailData: thumbnailData || undefined,
                 prompt: historyPrompt,
-                mode: activeTab,
+                mode: activeMode,
                 model: selectedModel,
                 aspectRatio: selectedRatio,
               }),
@@ -489,13 +456,13 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
         setError(data.error || '生成失败');
       }
     } catch (err: any) {
-      setError(err.message || '网络错误');
+      setError(err.message || '请求失败');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // 扩图后处理：将 AI 生成的结果与原图合成到目标分辨率
+  // 扩图后处理：将原图精确覆盖回 AI 生成的图片上
   const postProcessOutpaint = (
     aiResultData: string,
     outpaint: OutpaintData
@@ -566,373 +533,281 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
   const canGenerate = () => {
     if (!apiKey.trim()) return false;
     if (isGenerating) return false;
-    if (activeTab === 'outpaint') {
+    if (activeMode === 'outpaint') {
       return !!outpaintData;
     }
     return !!prompt.trim();
   };
 
-  // 移动端视图切换
-  const [mobileTab, setMobileTab] = useState<'create' | 'preview'>('create');
+  // iOS 风格组件 (内联定义，简化 props 传递)
+  const IOSGroup = ({ title, children }: { title?: string, children: React.ReactNode }) => (
+    <div className="ios-group-container">
+      {title && <div className="ios-group-header">{title}</div>}
+      <div className="ios-group-content">
+        {children}
+      </div>
+    </div>
+  );
 
-  // 监听生成开始，自动切换到预览
-  useEffect(() => {
-    if (isGenerating && window.innerWidth <= 768) {
-      setMobileTab('preview');
-    }
-  }, [isGenerating]);
+  const IOSListItem = ({
+    icon,
+    label,
+    children,
+    onClick,
+    showArrow,
+    className = ''
+  }: any) => (
+    <div className={`ios-list-item ${className}`} onClick={onClick}>
+      <div className="ios-item-left">
+        {icon && <span className="ios-item-icon">{icon}</span>}
+        <span className="ios-item-label">{label}</span>
+      </div>
+      <div className="ios-item-right">
+        {children}
+        {showArrow && <span className="ios-arrow">›</span>}
+      </div>
+    </div>
+  );
 
   return (
-    <>
-      {/* 头部导航 */}
-      <header className="header">
-        <div className="logo">
-          <div className="logo-icon">🍌</div>
-          <span>Nano Banana</span>
+    <div className="ios-app-wrapper">
+      {/* 顶部导航栏 (Glassmorphism) */}
+      <header className="ios-nav-bar blur-effect">
+        <div className="ios-nav-left">
+          <span className="logo-emoji">🍌</span>
+          <span className="nav-title">Nano Banana</span>
         </div>
-        <div className="header-right">
-          <button
-            className="history-btn"
-            onClick={() => setIsHistoryOpen(true)}
-          >
-            📜 历史记录
+        <div className="ios-nav-right">
+          <button className="ios-icon-btn" onClick={() => setIsHistoryOpen(true)}>
+            📜
           </button>
-          <a
-            href="https://aistudio.google.com/apikey"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="help-link"
-          >
-            获取 API Key →
-          </a>
         </div>
       </header>
 
-      {/* 主内容 */}
-      <div className="main-container">
-        {/* 左侧控制面板 - 移动端根据 tab 显示 */}
-        <aside className={`control-panel ${mobileTab === 'preview' ? 'mobile-hidden' : ''}`}>
-          {/* API Key 设置 */}
-          <div className="panel-section">
-            <div className="section-title">🔑 API Key</div>
-            <div className="api-key-section">
-              <div className="api-key-input-group">
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  className="api-key-input"
-                  placeholder="输入 Google AI Studio API Key"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+      {/* 主要内容区域 (视图切换) */}
+      <div className="ios-content-area">
+
+        {/* === 创作视图 === */}
+        <div className={`ios-view ${activeView === 'create' ? 'active' : ''}`}>
+          <div className="ios-scroll-container">
+
+            {/* 1. API Key 设置 */}
+            <IOSGroup title="设置">
+              <IOSListItem icon="🔑" label="API Key">
+                <div className="ios-input-wrapper">
+                  {apiKeyStatus === 'valid' ? (
+                    <span className="status-badge success" onClick={() => setApiKey('')}>已验证</span>
+                  ) : (
+                    <input
+                      type="password"
+                      className="ios-input-inline"
+                      placeholder="配置 API Key"
+                      value={apiKey}
+                      onChange={e => setApiKey(e.target.value)}
+                      onBlur={testApiKey}
+                    />
+                  )}
+                </div>
+              </IOSListItem>
+            </IOSGroup>
+
+            {/* 2. 创作模式 (Segmented Control) */}
+            <IOSGroup title="创作模式">
+              <div className="ios-segment-control">
+                <button
+                  className={activeMode === 'text2img' ? 'active' : ''}
+                  onClick={() => setActiveMode('text2img')}
+                >
+                  文生图
+                </button>
+                <button
+                  className={activeMode === 'img2img' ? 'active' : ''}
+                  onClick={() => setActiveMode('img2img')}
+                >
+                  图生图
+                </button>
+                <button
+                  className={activeMode === 'outpaint' ? 'active' : ''}
+                  onClick={() => setActiveMode('outpaint')}
+                >
+                  扩图
+                </button>
+              </div>
+            </IOSGroup>
+
+            {/* 3. 提示词输入 */}
+            <IOSGroup title="提示词">
+              <div className="ios-textarea-container">
+                <textarea
+                  className="ios-textarea"
+                  placeholder={activeMode === 'outpaint' ? "描述扩展区域的内容..." : "描述你想要生成的画面..."}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  rows={4}
                 />
-                <button
-                  className="api-key-toggle"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  title={showApiKey ? '隐藏' : '显示'}
-                >
-                  {showApiKey ? '👁️' : '👁️‍🗨️'}
-                </button>
+                <div className="ios-char-count">{prompt.length}/4000</div>
               </div>
-              <div className="api-key-actions">
-                <button
-                  className={`api-key-btn ${apiKeyStatus === 'testing' ? 'loading' : ''}`}
-                  onClick={testApiKey}
-                  disabled={apiKeyStatus === 'testing'}
-                >
-                  {apiKeyStatus === 'testing' ? '验证中...' : '验证'}
-                </button>
-                <button className="api-key-btn save" onClick={saveApiKey}>
-                  保存
-                </button>
-              </div>
-              {apiKeyMessage && (
-                <div className={`api-key-message ${apiKeyStatus}`}>
-                  {apiKeyMessage}
-                </div>
-              )}
-            </div>
-          </div>
+            </IOSGroup>
 
-          {/* 模式切换 */}
-          <div className="panel-section">
-            <div className="mode-tabs three-tabs">
-              <button
-                className={`mode-tab ${activeTab === 'text2img' ? 'active' : ''}`}
-                onClick={() => setActiveTab('text2img')}
-              >
-                📝 文生图
-              </button>
-              <button
-                className={`mode-tab ${activeTab === 'img2img' ? 'active' : ''}`}
-                onClick={() => setActiveTab('img2img')}
-              >
-                🖼️ 图生图
-              </button>
-              <button
-                className={`mode-tab ${activeTab === 'outpaint' ? 'active' : ''}`}
-                onClick={() => setActiveTab('outpaint')}
-              >
-                🔲 扩图
-              </button>
-            </div>
-          </div>
-
-          {/* 模型选择 */}
-          <div className="panel-section">
-            <div className="section-title">🤖 模型</div>
-            <div className="model-cards">
-              {MODELS.map((model) => (
+            {/* 4. 图片上传 (图生图/扩图) */}
+            {(activeMode === 'img2img') && (
+              <IOSGroup title="参考图片">
                 <div
-                  key={model.id}
-                  className={`model-card ${selectedModel === model.id ? 'active' : ''}`}
-                  onClick={() => setSelectedModel(model.id)}
+                  className="ios-upload-zone"
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  <div className="model-card-name">{model.name}</div>
-                  <div className="model-card-desc">{model.description}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 扩图编辑器 */}
-          {activeTab === 'outpaint' && (
-            <div className="panel-section">
-              <div className="section-title">🔲 扩图设置</div>
-              <OutpaintEditor onCompositeReady={handleOutpaintComposite} />
-            </div>
-          )}
-
-          {/* 图片配置 - 非扩图模式 */}
-          {activeTab !== 'outpaint' && (
-            <div className="panel-section">
-              <div className="section-title">📐 图片比例</div>
-              <div className="ratio-grid">
-                {ASPECT_RATIOS.map((ratio) => (
-                  <button
-                    key={ratio.id}
-                    className={`ratio-btn ${selectedRatio === ratio.id ? 'active' : ''}`}
-                    onClick={() => setSelectedRatio(ratio.id)}
-                  >
-                    {ratio.id}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 分辨率（仅 Pro 模型，非扩图模式） */}
-          {currentModel?.supports4K && activeTab !== 'outpaint' && (
-            <div className="panel-section">
-              <div className="section-title">📏 分辨率</div>
-              <div className="resolution-btns">
-                {RESOLUTIONS.map((res) => (
-                  <button
-                    key={res.id}
-                    className={`resolution-btn ${selectedResolution === res.id ? 'active' : ''}`}
-                    onClick={() => setSelectedResolution(res.id)}
-                  >
-                    {res.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 提示词 */}
-          <div className="panel-section">
-            <div className="prompt-container">
-              <div className="prompt-header">
-                <span className="prompt-label">
-                  {activeTab === 'outpaint' ? '✨ 扩展描述（可选）' : '✨ 提示词'}
-                </span>
-              </div>
-              <textarea
-                className="prompt-textarea"
-                placeholder={
-                  activeTab === 'outpaint'
-                    ? '可选：描述扩展区域的内容，如"继续延伸草原和蓝天"...'
-                    : '描述你想要生成的图片...'
-                }
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                maxLength={4000}
-              />
-              <div className="char-count">{prompt.length}/4000</div>
-            </div>
-          </div>
-
-          {/* 图片上传（图生图模式） */}
-          {activeTab === 'img2img' && (
-            <div className="panel-section">
-              <div className="section-title">📷 参考图片</div>
-              <div
-                className="upload-zone"
-                onClick={() => fileInputRef.current?.click()}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-              >
-                <div className="upload-icon">📁</div>
-                <div className="upload-text">点击或拖拽上传图片</div>
-                <div className="upload-hint">支持 JPG、PNG，最多 {MAX_IMAGES} 张</div>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                style={{ display: 'none' }}
-                onChange={handleFileUpload}
-              />
-              {uploadedImages.length > 0 && (
-                <div className="uploaded-images">
-                  {uploadedImages.map((img, index) => (
-                    <div key={index} className="uploaded-image">
-                      <img src={img.data} alt={img.name} />
-                      <button className="remove-image" onClick={() => removeImage(index)}>
-                        ×
-                      </button>
+                  {uploadedImages.length > 0 ? (
+                    <div className="ios-upload-preview">
+                      {uploadedImages.map((img, i) => (
+                        <img key={i} src={img.data} className="preview-thumb" />
+                      ))}
+                      <span className="upload-add-btn">+</span>
                     </div>
-                  ))}
+                  ) : (
+                    <div className="upload-placeholder">
+                      <span className="upload-icon">📷</span>
+                      <span>点击上传图片</span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* 错误提示 */}
-          {error && (
-            <div className="error-message">
-              <span>⚠️</span>
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* 生成按钮 */}
-          <button
-            className="generate-btn"
-            onClick={handleGenerate}
-            disabled={!canGenerate()}
-          >
-            {isGenerating ? (
-              <>
-                <span className="loading-spinner" style={{ width: 20, height: 20, marginBottom: 0 }} />
-                <span>生成中...</span>
-              </>
-            ) : (
-              <>
-                <span>🍌 {activeTab === 'outpaint' ? '扩展图片' : '生成图片'}</span>
-                <span className="model-tag">{currentModel?.name}</span>
-              </>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={handleFileUpload}
+                />
+              </IOSGroup>
             )}
-          </button>
-        </aside>
 
-        {/* 右侧预览区 - 移动端根据 tab 显示 */}
-        <main className={`preview-panel ${mobileTab === 'create' ? 'mobile-hidden' : ''}`}>
-          <div className="preview-header">
-            <h2 className="preview-title">预览</h2>
+            {activeMode === 'outpaint' && (
+              <IOSGroup title="扩图设置">
+                <OutpaintEditor onCompositeReady={handleOutpaintComposite} />
+              </IOSGroup>
+            )}
+
+            {/* 5. 参数设置 (模型 & 比例) */}
+            <IOSGroup title="参数配置">
+              <IOSListItem label="模型" showArrow>
+                <select
+                  className="ios-select-overlay"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                >
+                  {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                <span className="ios-value-text">{MODELS.find(m => m.id === selectedModel)?.name}</span>
+              </IOSListItem>
+
+              {activeMode !== 'outpaint' && (
+                <IOSListItem label="图片比例">
+                  <div className="ios-ratio-scroll">
+                    {ASPECT_RATIOS.map(ratio => (
+                      <button
+                        key={ratio.id}
+                        className={`ratio-chip-ios ${selectedRatio === ratio.id ? 'active' : ''}`}
+                        onClick={() => setSelectedRatio(ratio.id)}
+                      >
+                        {ratio.name.split(' ')[0]}
+                      </button>
+                    ))}
+                  </div>
+                </IOSListItem>
+              )}
+            </IOSGroup>
+
+            {apiKeyMessage && (
+              <div className="ios-toast-message">
+                {apiKeyMessage}
+              </div>
+            )}
+
+            <div style={{ height: 120 }}></div>
           </div>
 
-          <div className="preview-content">
-            {isGenerating ? (
-              <div className="generating-state">
-                <div className="loading-spinner" />
-                <div className="generating-text">
-                  {activeTab === 'outpaint' ? 'AI 正在扩展图片...' : 'AI 正在生成图片...'}
-                </div>
-                <div className="generating-hint">
-                  {selectedModel === 'gemini-3-pro-image-preview'
-                    ? 'Pro 模型生成高质量图片，可能需要 10-30 秒'
-                    : '快速模型生成中，通常需要 5-15 秒'}
-                </div>
+          {/* 底部悬浮生成按钮 */}
+          <div className="ios-bottom-action-bar blur-effect">
+            <button
+              className={`ios-action-btn ${isGenerating ? 'loading' : ''}`}
+              onClick={handleGenerate}
+              disabled={!canGenerate()}
+            >
+              {isGenerating ? 'AI 生成中...' : '✨ 开始生成'}
+            </button>
+          </div>
+        </div>
+
+        {/* === 画廊视图 === */}
+        <div className={`ios-view ${activeView === 'gallery' ? 'active' : ''}`}>
+          <div className="ios-scroll-container">
+            {resultImages.length === 0 && !isGenerating ? (
+              <div className="ios-empty-state">
+                <span className="empty-emoji">🎨</span>
+                <h3>这里空空如也</h3>
+                <p>去创作你的第一张 AI 图片吧</p>
+                <button className="ios-secondary-btn" onClick={() => setActiveView('create')}>
+                  去创作
+                </button>
               </div>
-            ) : resultImages.length > 0 ? (
-              <div className="result-gallery">
-                {resultImages.map((img, index) => (
-                  <div key={index} className="result-image-container">
-                    <img src={img.data} alt={`Generated ${index + 1}`} className="result-image" />
-                    <div className="image-actions">
-                      <button
-                        className="action-btn download"
-                        onClick={() => downloadImage(img, index)}
-                      >
-                        📥 下载
-                      </button>
+            ) : (
+              <div className="ios-gallery-grid">
+                {isGenerating && (
+                  <div className="ios-grid-item skeleton">
+                    <div className="loading-spinner"></div>
+                    <p>AI 正在绘制...</p>
+                  </div>
+                )}
+                {resultImages.map((img, idx) => (
+                  <div key={idx} className="ios-grid-item">
+                    <img src={img.data} alt="Result" onClick={() => {/* TODO: Preview */ }} />
+                    <div className="download-overlay" onClick={() => downloadImage(img, idx)}>
+                      📥
                     </div>
                   </div>
                 ))}
+                {/* 如果有文本结果 */}
                 {resultText && (
-                  <div className="result-text">
-                    <div className="result-text-label">AI 说明：</div>
-                    <div className="result-text-content">{resultText}</div>
+                  <div className="ios-result-text">
+                    {resultText}
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="empty-state">
-                <div className="empty-icon">🍌</div>
-                <div className="empty-title">Nano Banana 图片生成</div>
-                <div className="empty-desc">
-                  {activeTab === 'outpaint'
-                    ? '上传图片，调整扩展区域，AI 自动填充周围内容'
-                    : '输入提示词，选择模型和参数，点击生成按钮开始创作'}
-                </div>
-                <div className="empty-tips">
-                  {activeTab === 'outpaint' ? (
-                    <>
-                      <div className="tip">📤 上传原图后可拖动调整位置</div>
-                      <div className="tip">🔲 选择扩展比例和方向</div>
-                      <div className="tip">✨ 可添加描述来引导扩展内容</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="tip">💡 提示：描述越详细，生成效果越好</div>
-                      <div className="tip">🎨 支持中英文混合提示词</div>
-                      <div className="tip">⚡ Pro 模型支持 4K 高分辨率输出</div>
-                    </>
-                  )}
-                </div>
-              </div>
             )}
+            <div style={{ height: 100 }}></div>
           </div>
-        </main>
+        </div>
       </div>
 
-      {/* 移动端底部导航栏 */}
-      <div className="mobile-bottom-nav">
+      {/* 底部 Tab 导航栏 */}
+      <nav className="ios-tab-bar blur-effect">
         <button
-          className={`nav-item ${mobileTab === 'create' ? 'active' : ''}`}
-          onClick={() => setMobileTab('create')}
+          className={`tab-btn-ios ${activeView === 'create' ? 'active' : ''}`}
+          onClick={() => setActiveView('create')}
         >
-          <span className="nav-icon">🎨</span>
-          <span className="nav-label">创作</span>
+          <span className="tab-icon">✍️</span>
+          <span className="tab-label">创作</span>
         </button>
         <button
-          className={`nav-item ${mobileTab === 'preview' ? 'active' : ''}`}
-          onClick={() => setMobileTab('preview')}
+          className={`tab-btn-ios ${activeView === 'gallery' ? 'active' : ''}`}
+          onClick={() => setActiveView('gallery')}
         >
-          <div className="nav-icon-wrapper">
-            <span className="nav-icon">👁️</span>
-            {resultImages.length > 0 && !isGenerating && (
-              <span className="nav-badge"></span>
-            )}
-            {isGenerating && (
-              <span className="nav-loading-dot"></span>
-            )}
+          <div className="icon-wrapper">
+            <span className="tab-icon">🖼️</span>
+            {isGenerating && <span className="status-dot pulse"></span>}
+            {!isGenerating && resultImages.length > 0 && <span className="status-dot"></span>}
           </div>
-          <span className="nav-label">预览</span>
+          <span className="tab-label">画廊</span>
         </button>
-      </div>
+      </nav>
 
-      {/* 历史记录面板 */}
+      {/* 全局组件 */}
       <HistoryPanel
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
-        onSelectItem={(item) => {
-          // 点击历史记录时，在新窗口打开图片
-          window.open(item.imageUrl, '_blank');
-        }}
+        onSelectItem={(item) => window.open(item.imageUrl, '_blank')}
         apiKey={apiKey}
       />
-    </>
+    </div>
   );
 }
