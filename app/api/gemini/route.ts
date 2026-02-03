@@ -68,12 +68,17 @@ export async function POST(request: Request) {
                 }
             }
         } else {
-            // 图生图/扩图模式：Pro 模型使用 2K 输出分辨率
-            // 注意：必须使用大写 K (如 "2K" 而非 "2k")
+            // 图生图/扩图模式
+            generateConfig.imageConfig = {};
+
+            // 如果指定了比例（非 auto），则应用
+            if (aspectRatio) {
+                generateConfig.imageConfig.aspectRatio = aspectRatio;
+            }
+
+            // Pro 模型使用 2K 输出分辨率
             if (model === 'gemini-3-pro-image-preview') {
-                generateConfig.imageConfig = {
-                    imageSize: '2K',
-                };
+                generateConfig.imageConfig.imageSize = '2K';
             }
         }
 

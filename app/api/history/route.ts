@@ -5,7 +5,9 @@ import {
     addHistoryItem,
     deleteHistoryItem,
     uploadImage,
+    uploadThumbnail,
     getImageUrl,
+    getThumbnailUrl,
     getUserIdFromApiKey,
     HistoryItem,
 } from '@/lib/r2';
@@ -36,10 +38,11 @@ export async function GET(request: Request) {
         const history = await loadHistory(userId);
         console.log('[History API] GET - Loaded history items:', history.length);
 
-        // 为每个记录添加图片 URL
+        // 为每个记录添加图片 URL 和缩略图 URL
         const historyWithUrls = history.map(item => ({
             ...item,
             imageUrl: getImageUrl(item.imageKey),
+            thumbnailUrl: getThumbnailUrl(item.imageKey),
         }));
 
         return NextResponse.json({
@@ -86,7 +89,7 @@ export async function POST(request: Request) {
         console.log('[History API] POST - userId:', userId);
 
         const body = await request.json();
-        const { imageData, prompt, mode, model, aspectRatio } = body;
+        const { imageData, thumbnailData, prompt, mode, model, aspectRatio } = body;
         console.log('[History API] POST - prompt:', prompt, 'mode:', mode, 'model:', model);
 
         if (!imageData || !prompt) {
@@ -104,6 +107,17 @@ export async function POST(request: Request) {
         console.log('[History API] POST - Uploading image...');
         const imageKey = await uploadImage(imageData, id, userId);
         console.log('[History API] POST - Image uploaded, key:', imageKey);
+
+        // 上传缩略图（如果有）
+        if (thumbnailData) {
+            try {
+                await uploadThumbnail(thumbnailData, id, userId);
+                console.log('[History API] POST - Thumbnail uploaded');
+            } catch (err) {
+                console.error('[History API] POST - Thumbnail upload failed:', err);
+                // 缩略图上传失败不影响主流程
+            }
+        }
 
         // 创建历史记录项
         const historyItem: HistoryItem = {

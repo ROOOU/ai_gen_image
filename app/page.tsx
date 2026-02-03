@@ -22,6 +22,7 @@ const MODELS = [
 
 // 图片比例列表
 const ASPECT_RATIOS = [
+  { id: 'auto', name: '🔄 Auto' },
   { id: '1:1', name: '1:1 方形' },
   { id: '2:3', name: '2:3 竖版' },
   { id: '3:2', name: '3:2 横版' },
@@ -83,7 +84,7 @@ export default function Home() {
   // 模式和配置
   const [activeTab, setActiveTab] = useState<'text2img' | 'img2img' | 'outpaint'>('text2img');
   const [selectedModel, setSelectedModel] = useState(MODELS[1].id); // 默认使用 Pro
-  const [selectedRatio, setSelectedRatio] = useState('1:1');
+  const [selectedRatio, setSelectedRatio] = useState('auto');
   const [selectedResolution, setSelectedResolution] = useState('1K');
 
   // 生成状态
@@ -156,6 +157,68 @@ export default function Home() {
     }
   };
 
+  // 图片压缩函数：确保图片不超过 5MB（API限制 7MB，留余量）
+  const compressImageIfNeeded = async (dataUrl: string, fileName: string): Promise<{ data: string; wasCompressed: boolean }> => {
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
+    // 计算 base64 数据大小
+    const base64Data = dataUrl.split(',')[1];
+    const binarySize = Math.ceil((base64Data.length * 3) / 4);
+
+    if (binarySize <= MAX_SIZE) {
+      return { data: dataUrl, wasCompressed: false };
+    }
+
+    console.log(`[压缩] ${fileName}: 原始大小 ${(binarySize / 1024 / 1024).toFixed(2)}MB，开始压缩...`);
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        // 计算需要的缩放比例
+        let scale = Math.sqrt(MAX_SIZE / binarySize) * 0.9; // 额外缩小 10% 确保不超限
+        let quality = 0.85;
+
+        const compress = () => {
+          const canvas = document.createElement('canvas');
+          const newWidth = Math.floor(img.width * scale);
+          const newHeight = Math.floor(img.height * scale);
+          canvas.width = newWidth;
+          canvas.height = newHeight;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('无法创建画布'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, newWidth, newHeight);
+          const compressedData = canvas.toDataURL('image/jpeg', quality);
+
+          // 检查压缩后大小
+          const compressedBase64 = compressedData.split(',')[1];
+          const compressedSize = Math.ceil((compressedBase64.length * 3) / 4);
+
+          if (compressedSize > MAX_SIZE && (scale > 0.1 || quality > 0.5)) {
+            // 仍然太大，继续缩小
+            if (quality > 0.5) {
+              quality -= 0.1;
+            } else {
+              scale *= 0.8;
+            }
+            compress();
+          } else {
+            console.log(`[压缩] ${fileName}: 压缩后 ${(compressedSize / 1024 / 1024).toFixed(2)}MB (${newWidth}x${newHeight})`);
+            resolve({ data: compressedData, wasCompressed: true });
+          }
+        };
+
+        compress();
+      };
+      img.onerror = () => reject(new Error('加载图片失败'));
+      img.src = dataUrl;
+    });
+  };
+
   // 处理文件上传
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -167,7 +230,7 @@ export default function Home() {
   };
 
   // 处理文件
-  const processFiles = (files: File[]) => {
+  const processFiles = async (files: File[]) => {
     const remainingSlots = MAX_IMAGES - uploadedImages.length;
     if (remainingSlots <= 0) {
       setError(`最多只能上传 ${MAX_IMAGES} 张图片`);
@@ -175,33 +238,55 @@ export default function Home() {
     }
 
     const filesToProcess = files.slice(0, remainingSlots);
+    let compressedCount = 0;
 
-    filesToProcess.forEach((file) => {
+    for (const file of filesToProcess) {
       if (!file.type.startsWith('image/')) {
         setError('只支持图片文件');
-        return;
+        continue;
       }
 
-      if (file.size > 20 * 1024 * 1024) {
-        setError('图片大小不能超过 20MB');
-        return;
+      if (file.size > 50 * 1024 * 1024) {
+        setError('图片大小不能超过 50MB');
+        continue;
       }
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
+      try {
+        // 读取文件
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        // 检查并压缩
+        const { data, wasCompressed } = await compressImageIfNeeded(dataUrl, file.name);
+        if (wasCompressed) {
+          compressedCount++;
+        }
+
         setUploadedImages((prev) => [
           ...prev,
           {
-            data: event.target?.result as string,
-            name: file.name,
-            mimeType: file.type,
+            data,
+            name: file.name + (wasCompressed ? ' (已压缩)' : ''),
+            mimeType: wasCompressed ? 'image/jpeg' : file.type,
           },
         ]);
         setActiveTab('img2img');
         setError(null);
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (err) {
+        console.error('处理图片失败:', err);
+        setError('处理图片失败');
+      }
+    }
+
+    if (compressedCount > 0) {
+      // 显示压缩提示（不阻塞）
+      setError(`⚡ ${compressedCount} 张图片已自动压缩以满足 API 限制`);
+      setTimeout(() => setError(null), 3000);
+    }
   };
 
   // 拖拽处理
@@ -288,7 +373,10 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
         ];
       } else {
         requestBody.prompt = prompt.trim();
-        requestBody.aspectRatio = selectedRatio;
+        // 只有当比例不是 auto 时才传递（auto 模式让 API 自动匹配图片比例）
+        if (selectedRatio !== 'auto') {
+          requestBody.aspectRatio = selectedRatio;
+        }
 
         // 如果是 Pro 模型，添加分辨率
         if (selectedModel === 'gemini-3-pro-image-preview') {
@@ -342,29 +430,60 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
             : prompt.trim();
 
           console.log('[handleGenerate] 开始保存历史记录...');
-          fetch('/api/history', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey.trim(),
-            },
-            body: JSON.stringify({
-              imageData: finalImages[0].data,
-              prompt: historyPrompt,
-              mode: activeTab,
-              model: selectedModel,
-              aspectRatio: selectedRatio,
-            }),
-          })
-            .then(async (res) => {
-              const result = await res.json();
-              if (result.success) {
-                console.log('[handleGenerate] 历史记录保存成功');
-              } else {
-                console.error('[handleGenerate] 历史记录保存失败:', result.error);
-              }
+
+          // 生成缩略图
+          const generateThumbnail = (imageData: string): Promise<string> => {
+            return new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                const THUMB_SIZE = 300;
+                const scale = Math.min(THUMB_SIZE / img.width, THUMB_SIZE / img.height);
+                const width = Math.floor(img.width * scale);
+                const height = Math.floor(img.height * scale);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  ctx.drawImage(img, 0, 0, width, height);
+                  resolve(canvas.toDataURL('image/jpeg', 0.7));
+                } else {
+                  resolve(''); // 失败时返回空
+                }
+              };
+              img.onerror = () => resolve('');
+              img.src = imageData;
+            });
+          };
+
+          // 生成缩略图后发送
+          generateThumbnail(finalImages[0].data).then(thumbnailData => {
+            fetch('/api/history', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey.trim(),
+              },
+              body: JSON.stringify({
+                imageData: finalImages[0].data,
+                thumbnailData: thumbnailData || undefined,
+                prompt: historyPrompt,
+                mode: activeTab,
+                model: selectedModel,
+                aspectRatio: selectedRatio,
+              }),
             })
-            .catch(err => console.error('[handleGenerate] 历史记录保存请求失败:', err));
+              .then(async (res) => {
+                const result = await res.json();
+                if (result.success) {
+                  console.log('[handleGenerate] 历史记录保存成功');
+                } else {
+                  console.error('[handleGenerate] 历史记录保存失败:', result.error);
+                }
+              })
+              .catch(err => console.error('[handleGenerate] 历史记录保存请求失败:', err));
+          });
         }
       } else {
         setError(data.error || '生成失败');

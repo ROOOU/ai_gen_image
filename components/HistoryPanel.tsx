@@ -9,6 +9,7 @@ interface HistoryItem {
     mode: 'text2img' | 'img2img' | 'outpaint';
     model: string;
     imageUrl: string;
+    thumbnailUrl?: string;  // 缩略图 URL
     aspectRatio?: string;
 }
 
@@ -154,7 +155,7 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                                     onClick={() => onSelectItem(item)}
                                 >
                                     <div className="history-item-image">
-                                        <img src={item.imageUrl} alt={item.prompt} loading="lazy" />
+                                        <img src={item.thumbnailUrl || item.imageUrl} alt={item.prompt} loading="lazy" />
                                         <div className="history-item-overlay">
                                             <span className="history-mode-badge">{getModeLabel(item.mode)}</span>
                                         </div>

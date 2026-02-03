@@ -54,6 +54,13 @@ function getImageKey(userId: string, imageId: string): string {
 }
 
 /**
+ * 获取用户专属的缩略图存储路径
+ */
+function getThumbnailKey(userId: string, imageId: string): string {
+    return `images/${userId}/${imageId}_thumb.jpg`;
+}
+
+/**
  * 检查 R2 是否已配置
  */
 export function isR2Configured(): boolean {
@@ -86,6 +93,29 @@ export async function uploadImage(
 }
 
 /**
+ * 上传缩略图到 R2
+ */
+export async function uploadThumbnail(
+    thumbnailData: string,
+    imageId: string,
+    userId: string
+): Promise<string> {
+    const base64Data = thumbnailData.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const key = getThumbnailKey(userId, imageId);
+
+    await s3Client.send(new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: 'image/jpeg',
+    }));
+
+    return key;
+}
+
+/**
  * 获取图片的公开 URL
  */
 export function getImageUrl(imageKey: string): string {
@@ -94,6 +124,15 @@ export function getImageUrl(imageKey: string): string {
     }
     // 如果没有配置公开 URL，返回 API 代理路径
     return `/api/history/image?key=${encodeURIComponent(imageKey)}`;
+}
+
+/**
+ * 获取缩略图的公开 URL
+ */
+export function getThumbnailUrl(imageKey: string): string {
+    // 将原图 key 转换为缩略图 key
+    const thumbKey = imageKey.replace('.jpg', '_thumb.jpg');
+    return getImageUrl(thumbKey);
 }
 
 /**
