@@ -341,6 +341,7 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
             ? (prompt.trim() || '扩展图片')
             : prompt.trim();
 
+          console.log('[handleGenerate] 开始保存历史记录...');
           fetch('/api/history', {
             method: 'POST',
             headers: {
@@ -354,7 +355,16 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
               model: selectedModel,
               aspectRatio: selectedRatio,
             }),
-          }).catch(err => console.log('保存历史记录失败:', err));
+          })
+            .then(async (res) => {
+              const result = await res.json();
+              if (result.success) {
+                console.log('[handleGenerate] 历史记录保存成功');
+              } else {
+                console.error('[handleGenerate] 历史记录保存失败:', result.error);
+              }
+            })
+            .catch(err => console.error('[handleGenerate] 历史记录保存请求失败:', err));
         }
       } else {
         setError(data.error || '生成失败');
