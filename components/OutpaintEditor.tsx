@@ -3,145 +3,94 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface OutpaintEditorProps {
-    onCompositeReady: (data: {
-        compositeImage: string;
-        maskImage: string;
-        originalImage: string;
-        originalX: number;
-        originalY: number;
-        originalWidth: number;
-        originalHeight: number;
-        width: number;
-        height: number;
-        targetWidth: number;
-        targetHeight: number;
-        scale: number;
-    }) => void;
+    onCompositeReady: (data: any) => void;
 }
 
-// 预设扩展选项
 const EXPAND_PRESETS = [
-    { id: 'top', name: '向上扩展', icon: '⬆️', dx: 0, dy: -0.5 },
-    { id: 'bottom', name: '向下扩展', icon: '⬇️', dx: 0, dy: 0.5 },
-    { id: 'left', name: '向左扩展', icon: '⬅️', dx: -0.5, dy: 0 },
-    { id: 'right', name: '向右扩展', icon: '➡️', dx: 0.5, dy: 0 },
-    { id: 'all', name: '四周扩展', icon: '⊞', dx: 0.25, dy: 0.25 },
+    { id: 'top', name: 'Up', icon: '⬆️' },
+    { id: 'bottom', name: 'Down', icon: '⬇️' },
+    { id: 'left', name: 'Left', icon: '⬅️' },
+    { id: 'right', name: 'Right', icon: '➡️' },
+    { id: 'all', name: 'Center', icon: '⊞' },
 ];
 
-// 画布尺寸比例选项
 const SCALE_OPTIONS = [
-    { id: '1.5x', scale: 1.5, name: '1.5倍' },
-    { id: '2x', scale: 2, name: '2倍' },
-    { id: 'custom', scale: 0, name: '自定义' },
+    { id: '1.5x', scale: 1.5, name: '1.5x' },
+    { id: '2x', scale: 2, name: '2x' },
+    { id: 'custom', scale: 0, name: 'Custom' },
 ];
 
 export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps) {
-    // 原图数据
     const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
     const [originalDataUrl, setOriginalDataUrl] = useState<string>('');
-
-    // 画布尺寸
     const [canvasWidth, setCanvasWidth] = useState(1024);
     const [canvasHeight, setCanvasHeight] = useState(1024);
     const [selectedScale, setSelectedScale] = useState('1.5x');
-    const [imageAspectRatio, setImageAspectRatio] = useState(1);
-
-    // 自定义尺寸输入
-    const [customWidth, setCustomWidth] = useState('');
-    const [customHeight, setCustomHeight] = useState('');
-
-    // 原图在画布中的位置（百分比 0-1）
     const [imageX, setImageX] = useState(0.25);
     const [imageY, setImageY] = useState(0.25);
-
-    // 拖拽状态
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [dragImageStart, setDragImageStart] = useState({ x: 0, y: 0 });
 
-    // Refs
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // 处理图片上传
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = (event) => {
             const dataUrl = event.target?.result as string;
             setOriginalDataUrl(dataUrl);
-
             const img = new Image();
             img.onload = () => {
                 setOriginalImage(img);
-                setImageAspectRatio(img.width / img.height);
-                // 初始化自定义尺寸
-                setCustomWidth(String(Math.round(img.width * 1.5)));
-                setCustomHeight(String(Math.round(img.height * 1.5)));
-                // 使用选择的比例设置画布尺寸
-                updateCanvasSize(img.width, img.height, selectedScale);
-                resetImagePosition();
+                setCanvasWidth(Math.round(img.width * 1.5));
+                setCanvasHeight(Math.round(img.height * 1.5));
+                setImageX(0.25); setImageY(0.25);
             };
             img.src = dataUrl;
         };
         reader.readAsDataURL(file);
     };
 
-    // 更新画布尺寸
-    const updateCanvasSize = (imgWidth: number, imgHeight: number, scaleId: string) => {
-        if (scaleId === 'custom') {
-            // 自定义模式使用输入的尺寸
-            const w = parseInt(customWidth) || Math.round(imgWidth * 1.5);
-            const h = parseInt(customHeight) || Math.round(imgHeight * 1.5);
-            setCanvasWidth(Math.max(imgWidth, Math.min(w, 4096)));
-            setCanvasHeight(Math.max(imgHeight, Math.min(h, 4096)));
-        } else {
-            const option = SCALE_OPTIONS.find(s => s.id === scaleId);
-            if (option && option.scale > 0) {
-                setCanvasWidth(Math.round(imgWidth * option.scale));
-                setCanvasHeight(Math.round(imgHeight * option.scale));
-            }
+    const generateComposite = useCallback(() => {
+        if (!originalImage || !canvasRef.current) return;
+        const canvas = canvasRef.current;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.fillStyle = '#7F7F7F';
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.drawImage(originalImage, imageX * canvasWidth, imageY * canvasHeight, originalImage.width, originalImage.height);
+
+        const compositeData = canvas.toDataURL('image/jpeg', 0.9);
+
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = canvasWidth; maskCanvas.height = canvasHeight;
+        const maskCtx = maskCanvas.getContext('2d');
+        if (maskCtx) {
+            maskCtx.fillStyle = '#FFFFFF';
+            maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+            maskCtx.fillStyle = '#000000';
+            maskCtx.fillRect(imageX * canvasWidth, imageY * canvasHeight, originalImage.width, originalImage.height);
+            onCompositeReady({
+                compositeImage: compositeData,
+                maskImage: maskCanvas.toDataURL('image/png'),
+                originalImage: originalDataUrl,
+                originalX: imageX, originalY: imageY,
+                originalWidth: originalImage.width, originalHeight: originalImage.height,
+                width: canvasWidth, height: canvasHeight,
+                targetWidth: canvasWidth, targetHeight: canvasHeight, scale: 1
+            });
         }
-    };
+    }, [originalImage, originalDataUrl, canvasWidth, canvasHeight, imageX, imageY, onCompositeReady]);
 
-    // 重置图片位置到中心
-    const resetImagePosition = () => {
-        if (!originalImage) return;
-        const imgRatioX = originalImage.width / canvasWidth;
-        const imgRatioY = originalImage.height / canvasHeight;
-        setImageX((1 - imgRatioX) / 2);
-        setImageY((1 - imgRatioY) / 2);
-    };
+    useEffect(() => { if (originalImage) generateComposite(); }, [originalImage, imageX, imageY, canvasWidth, canvasHeight, generateComposite]);
 
-    // 应用预设扩展方向
-    const applyPreset = (presetId: string) => {
-        if (!originalImage) return;
-
-        const imgRatioX = originalImage.width / canvasWidth;
-        const imgRatioY = originalImage.height / canvasHeight;
-
-        let newX = (1 - imgRatioX) / 2;
-        let newY = (1 - imgRatioY) / 2;
-
-        if (presetId === 'top') {
-            newY = 1 - imgRatioY;
-        } else if (presetId === 'bottom') {
-            newY = 0;
-        } else if (presetId === 'left') {
-            newX = 1 - imgRatioX;
-        } else if (presetId === 'right') {
-            newX = 0;
-        }
-        // 'all' 保持居中
-
-        setImageX(Math.max(0, Math.min(newX, 1 - imgRatioX)));
-        setImageY(Math.max(0, Math.min(newY, 1 - imgRatioY)));
-    };
-
-    // 拖拽开始
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!originalImage) return;
         setIsDragging(true);
@@ -149,301 +98,86 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         setDragImageStart({ x: imageX, y: imageY });
     };
 
-    // 拖拽移动
     const handleMouseMove = useCallback((e: MouseEvent) => {
         if (!isDragging || !containerRef.current || !originalImage) return;
-
-        const container = containerRef.current;
-        const rect = container.getBoundingClientRect();
-
+        const rect = containerRef.current.getBoundingClientRect();
         const dx = (e.clientX - dragStart.x) / rect.width;
         const dy = (e.clientY - dragStart.y) / rect.height;
-
-        const imgRatioX = originalImage.width / canvasWidth;
-        const imgRatioY = originalImage.height / canvasHeight;
-
-        const newX = Math.max(0, Math.min(dragImageStart.x + dx, 1 - imgRatioX));
-        const newY = Math.max(0, Math.min(dragImageStart.y + dy, 1 - imgRatioY));
-
-        setImageX(newX);
-        setImageY(newY);
+        setImageX(Math.max(0, Math.min(dragImageStart.x + dx, 1 - (originalImage.width / canvasWidth))));
+        setImageY(Math.max(0, Math.min(dragImageStart.y + dy, 1 - (originalImage.height / canvasHeight))));
     }, [isDragging, dragStart, dragImageStart, canvasWidth, canvasHeight, originalImage]);
 
-    // 拖拽结束
-    const handleMouseUp = useCallback(() => {
-        setIsDragging(false);
-    }, []);
-
-    // 添加全局鼠标事件
     useEffect(() => {
         if (isDragging) {
             window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('mouseup', () => setIsDragging(false));
             return () => {
                 window.removeEventListener('mousemove', handleMouseMove);
-                window.removeEventListener('mouseup', handleMouseUp);
+                window.removeEventListener('mouseup', () => setIsDragging(false));
             };
         }
-    }, [isDragging, handleMouseMove, handleMouseUp]);
-
-    // Gemini API 最大尺寸限制
-    const MAX_API_SIZE = 3072;
-
-    // 生成合成图和遮罩图
-    const generateComposite = useCallback(() => {
-        if (!originalImage || !canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-
-        // 检查是否需要缩放以适应 API 限制
-        let finalWidth = canvasWidth;
-        let finalHeight = canvasHeight;
-        let scale = 1;
-
-        if (canvasWidth > MAX_API_SIZE || canvasHeight > MAX_API_SIZE) {
-            // 需要缩放
-            scale = Math.min(MAX_API_SIZE / canvasWidth, MAX_API_SIZE / canvasHeight);
-            finalWidth = Math.round(canvasWidth * scale);
-            finalHeight = Math.round(canvasHeight * scale);
-        }
-
-        // 计算原图绘制位置和尺寸（按比例缩放）
-        const drawX = imageX * finalWidth;
-        const drawY = imageY * finalHeight;
-        const drawWidth = originalImage.width * scale;
-        const drawHeight = originalImage.height * scale;
-
-        // === 生成合成图（原图 + 灰色背景）===
-        canvas.width = finalWidth;
-        canvas.height = finalHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // 填充中性灰背景作为需要扩展的区域标识
-        ctx.fillStyle = '#7F7F7F';
-        ctx.fillRect(0, 0, finalWidth, finalHeight);
-
-        // 绘制原图（缩放后）
-        ctx.drawImage(originalImage, drawX, drawY, drawWidth, drawHeight);
-
-        // 导出合成图 - 使用 JPEG 格式减少文件大小
-        const compositeData = canvas.toDataURL('image/jpeg', 0.92);
-
-        // === 生成遮罩图（黑色=保留, 白色=生成）===
-        // 创建临时 canvas 用于遮罩
-        const maskCanvas = document.createElement('canvas');
-        maskCanvas.width = finalWidth;
-        maskCanvas.height = finalHeight;
-        const maskCtx = maskCanvas.getContext('2d');
-        if (!maskCtx) return;
-
-        // 整个画布填充白色（需要生成的区域）
-        maskCtx.fillStyle = '#FFFFFF';
-        maskCtx.fillRect(0, 0, finalWidth, finalHeight);
-
-        // 原图区域填充黑色（需要保留的区域）
-        maskCtx.fillStyle = '#000000';
-        maskCtx.fillRect(drawX, drawY, drawWidth, drawHeight);
-
-        // 导出遮罩图 - 使用 PNG 格式保持精确
-        const maskData = maskCanvas.toDataURL('image/png');
-
-        // 回调传递完整数据
-        onCompositeReady({
-            compositeImage: compositeData,
-            maskImage: maskData,
-            originalImage: originalDataUrl,
-            originalX: imageX,
-            originalY: imageY,
-            originalWidth: originalImage.width,
-            originalHeight: originalImage.height,
-            width: finalWidth,
-            height: finalHeight,
-            targetWidth: canvasWidth,  // 用户期望的目标尺寸
-            targetHeight: canvasHeight,
-            scale: scale,  // 缩放因子
-        });
-    }, [originalImage, originalDataUrl, canvasWidth, canvasHeight, imageX, imageY, onCompositeReady]);
-
-    // 当相关参数改变时更新合成图
-    useEffect(() => {
-        if (originalImage) {
-            generateComposite();
-        }
-    }, [originalImage, imageX, imageY, canvasWidth, canvasHeight, generateComposite]);
-
-    // 处理缩放比例改变
-    const handleScaleChange = (scaleId: string) => {
-        setSelectedScale(scaleId);
-        if (originalImage) {
-            updateCanvasSize(originalImage.width, originalImage.height, scaleId);
-            // 重置位置到中心
-            setTimeout(() => resetImagePosition(), 0);
-        }
-    };
-
-    // 处理自定义尺寸输入
-    const handleCustomSizeChange = (type: 'width' | 'height', value: string) => {
-        const numValue = value.replace(/\D/g, '');
-        if (type === 'width') {
-            setCustomWidth(numValue);
-        } else {
-            setCustomHeight(numValue);
-        }
-    };
-
-    // 应用自定义尺寸
-    const applyCustomSize = () => {
-        if (!originalImage) return;
-        const w = parseInt(customWidth) || originalImage.width;
-        const h = parseInt(customHeight) || originalImage.height;
-        // 确保尺寸不小于原图，不超过 4096
-        setCanvasWidth(Math.max(originalImage.width, Math.min(w, 4096)));
-        setCanvasHeight(Math.max(originalImage.height, Math.min(h, 4096)));
-        setTimeout(() => resetImagePosition(), 0);
-    };
-
-    // 计算预览中原图的显示比例
-    const imageWidthPercent = originalImage ? (originalImage.width / canvasWidth * 100) : 50;
-    const imageHeightPercent = originalImage ? (originalImage.height / canvasHeight * 100) : 50;
+    }, [isDragging, handleMouseMove]);
 
     return (
-        <div className="outpaint-editor">
-            {/* 上传区域（未选择图片时显示） */}
-            {!originalImage && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {!originalImage ? (
                 <div
-                    className="upload-zone outpaint-upload"
+                    style={{ padding: '32px', border: '1px dashed var(--border-color)', borderRadius: 12, textAlign: 'center', cursor: 'pointer', background: 'var(--bg-tertiary)' }}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    <div className="upload-icon">🖼️</div>
-                    <div className="upload-text">上传要扩展的图片</div>
-                    <div className="upload-hint">支持 JPG、PNG</div>
+                    <p style={{ fontSize: 24, marginBottom: 8 }}>🖼️</p>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Upload photo to expand</p>
                 </div>
-            )}
-
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={handleFileUpload}
-            />
-
-            {/* 已上传图片时显示编辑器 */}
-            {originalImage && (
+            ) : (
                 <>
-                    {/* 缩放比例选择 */}
-                    <div className="outpaint-controls">
-                        <div className="control-group">
-                            <label className="control-label">扩展比例</label>
-                            <div className="scale-btns">
-                                {SCALE_OPTIONS.map((option) => (
-                                    <button
-                                        key={option.id}
-                                        className={`scale-btn ${selectedScale === option.id ? 'active' : ''}`}
-                                        onClick={() => handleScaleChange(option.id)}
-                                    >
-                                        {option.name}
-                                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div>
+                            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Direction</p>
+                            <div className="selection-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+                                {EXPAND_PRESETS.map(p => (
+                                    <button key={p.id} className="selection-btn" onClick={() => {
+                                        if (p.id === 'top') setImageY(1 - originalImage.height / canvasHeight);
+                                        if (p.id === 'bottom') setImageY(0);
+                                        if (p.id === 'left') setImageX(1 - originalImage.width / canvasWidth);
+                                        if (p.id === 'right') setImageX(0);
+                                        if (p.id === 'all') { setImageX((1 - originalImage.width / canvasWidth) / 2); setImageY((1 - originalImage.height / canvasHeight) / 2); }
+                                    }}>{p.icon}</button>
                                 ))}
                             </div>
                         </div>
 
-                        {/* 自定义尺寸输入 */}
-                        {selectedScale === 'custom' && (
-                            <div className="control-group">
-                                <label className="control-label">目标尺寸 (像素)</label>
-                                <div className="custom-size-inputs">
-                                    <input
-                                        type="text"
-                                        className="size-input"
-                                        placeholder="宽度"
-                                        value={customWidth}
-                                        onChange={(e) => handleCustomSizeChange('width', e.target.value)}
-                                        onBlur={applyCustomSize}
-                                    />
-                                    <span className="size-divider">×</span>
-                                    <input
-                                        type="text"
-                                        className="size-input"
-                                        placeholder="高度"
-                                        value={customHeight}
-                                        onChange={(e) => handleCustomSizeChange('height', e.target.value)}
-                                        onBlur={applyCustomSize}
-                                    />
-                                </div>
+                        <div
+                            ref={containerRef}
+                            onMouseDown={handleMouseDown}
+                            style={{
+                                aspectRatio: `${canvasWidth}/${canvasHeight}`,
+                                background: '#111',
+                                borderRadius: 8,
+                                position: 'relative',
+                                overflow: 'hidden',
+                                border: '1px solid var(--border-color)',
+                                cursor: isDragging ? 'grabbing' : 'grab'
+                            }}
+                        >
+                            <div style={{
+                                position: 'absolute',
+                                left: `${imageX * 100}%`,
+                                top: `${imageY * 100}%`,
+                                width: `${(originalImage.width / canvasWidth) * 100}%`,
+                                height: `${(originalImage.height / canvasHeight) * 100}%`,
+                                boxShadow: '0 0 20px rgba(0,0,0,0.5)',
+                                zIndex: 2
+                            }}>
+                                <img src={originalDataUrl} style={{ width: '100%', height: '100%', display: 'block' }} alt="Orig" draggable={false} />
                             </div>
-                        )}
-
-                        {/* 扩展方向预设 */}
-                        <div className="control-group">
-                            <label className="control-label">扩展方向</label>
-                            <div className="preset-btns">
-                                {EXPAND_PRESETS.map((preset) => (
-                                    <button
-                                        key={preset.id}
-                                        className="preset-btn"
-                                        onClick={() => applyPreset(preset.id)}
-                                        title={preset.name}
-                                    >
-                                        {preset.icon}
-                                    </button>
-                                ))}
-                            </div>
+                            <div style={{ position: 'absolute', inset: 0, opacity: 0.1, background: 'url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAAXNSR0IArs4c6QAAACpJREFUGFdjZEACDAwMgAIsDAwMMMYMBgYmBqBBjCAMY8xgAApADYIxEAYAbDQDAsMND8IAAAAASUVORK5CYII=")' }}></div>
                         </div>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>Drag image to position</p>
                     </div>
-
-                    {/* 画布预览区 */}
-                    <div
-                        ref={containerRef}
-                        className={`outpaint-canvas-container ${isDragging ? 'dragging' : ''}`}
-                        style={{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }}
-                        onMouseDown={handleMouseDown}
-                    >
-                        {/* 灰色背景表示扩展区域 */}
-                        <div className="canvas-background">
-                            {/* 原图位置指示器 */}
-                            <div
-                                className="image-preview"
-                                style={{
-                                    left: `${imageX * 100}%`,
-                                    top: `${imageY * 100}%`,
-                                    width: `${imageWidthPercent}%`,
-                                    height: `${imageHeightPercent}%`,
-                                }}
-                            >
-                                <img src={originalDataUrl} alt="Original" draggable={false} />
-                            </div>
-                        </div>
-
-                        {/* 提示文字 */}
-                        <div className="canvas-hint">拖动图片调整位置</div>
-                    </div>
-
-                    {/* 尺寸信息 */}
-                    <div className="size-info">
-                        <span>原图: {originalImage.width} × {originalImage.height}</span>
-                        <span>→</span>
-                        <span>目标: {canvasWidth} × {canvasHeight}</span>
-                        {(canvasWidth > MAX_API_SIZE || canvasHeight > MAX_API_SIZE) && (
-                            <span className="size-warning">
-                                (API限制，实际: {Math.round(canvasWidth * Math.min(MAX_API_SIZE / canvasWidth, MAX_API_SIZE / canvasHeight))} × {Math.round(canvasHeight * Math.min(MAX_API_SIZE / canvasWidth, MAX_API_SIZE / canvasHeight))})
-                            </span>
-                        )}
-                    </div>
-
-                    {/* 更换图片按钮 */}
-                    <button
-                        className="change-image-btn"
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        更换图片
-                    </button>
-
-                    {/* 隐藏的画布用于生成合成图 */}
-                    <canvas ref={canvasRef} style={{ display: 'none' }} />
                 </>
             )}
+            <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileUpload} />
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
         </div>
     );
 }
