@@ -1235,6 +1235,7 @@ body {
   margin: 0 0 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.4;
@@ -1537,8 +1538,124 @@ body {
     flex-direction: column;
   }
 
+
   .preview-btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* 移动端底部导航栏 */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: rgba(16, 16, 16, 0.95);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border-color);
+  z-index: 1000;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.nav-item.active {
+  color: var(--accent-primary);
+}
+
+.nav-icon {
+  font-size: 20px;
+}
+
+.nav-label {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.nav-icon-wrapper {
+  position: relative;
+}
+
+.nav-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  border: 1px solid var(--bg-secondary);
+}
+
+.nav-loading-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: var(--accent-green);
+  border-radius: 50%;
+  border: 1px solid var(--bg-secondary);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.5);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+  }
+
+  .main-container {
+    padding-bottom: 80px;
+    /* 为底部导航栏留出空间 */
+  }
+
+  /* 移动端视图切换控制 */
+  .control-panel.mobile-hidden {
+    display: none;
+  }
+
+  .preview-panel.mobile-hidden {
+    display: none;
+  }
+
+  /* 调整生成按钮位置和样式，避免被导航栏遮挡 */
+  .generate-btn {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    margin-top: auto;
+    box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.2);
   }
 }

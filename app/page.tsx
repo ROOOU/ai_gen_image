@@ -572,6 +572,16 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
     return !!prompt.trim();
   };
 
+  // 移动端视图切换
+  const [mobileTab, setMobileTab] = useState<'create' | 'preview'>('create');
+
+  // 监听生成开始，自动切换到预览
+  useEffect(() => {
+    if (isGenerating && window.innerWidth <= 768) {
+      setMobileTab('preview');
+    }
+  }, [isGenerating]);
+
   return (
     <>
       {/* 头部导航 */}
@@ -600,8 +610,8 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
 
       {/* 主内容 */}
       <div className="main-container">
-        {/* 左侧控制面板 */}
-        <aside className="control-panel">
+        {/* 左侧控制面板 - 移动端根据 tab 显示 */}
+        <aside className={`control-panel ${mobileTab === 'preview' ? 'mobile-hidden' : ''}`}>
           {/* API Key 设置 */}
           <div className="panel-section">
             <div className="section-title">🔑 API Key</div>
@@ -816,8 +826,8 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
           </button>
         </aside>
 
-        {/* 右侧预览区 */}
-        <main className="preview-panel">
+        {/* 右侧预览区 - 移动端根据 tab 显示 */}
+        <main className={`preview-panel ${mobileTab === 'create' ? 'mobile-hidden' : ''}`}>
           <div className="preview-header">
             <h2 className="preview-title">预览</h2>
           </div>
@@ -885,6 +895,32 @@ CRITICAL: Do NOT modify, regenerate, or alter ANY pixels in the black masked are
             )}
           </div>
         </main>
+      </div>
+
+      {/* 移动端底部导航栏 */}
+      <div className="mobile-bottom-nav">
+        <button
+          className={`nav-item ${mobileTab === 'create' ? 'active' : ''}`}
+          onClick={() => setMobileTab('create')}
+        >
+          <span className="nav-icon">🎨</span>
+          <span className="nav-label">创作</span>
+        </button>
+        <button
+          className={`nav-item ${mobileTab === 'preview' ? 'active' : ''}`}
+          onClick={() => setMobileTab('preview')}
+        >
+          <div className="nav-icon-wrapper">
+            <span className="nav-icon">👁️</span>
+            {resultImages.length > 0 && !isGenerating && (
+              <span className="nav-badge"></span>
+            )}
+            {isGenerating && (
+              <span className="nav-loading-dot"></span>
+            )}
+          </div>
+          <span className="nav-label">预览</span>
+        </button>
       </div>
 
       {/* 历史记录面板 */}
