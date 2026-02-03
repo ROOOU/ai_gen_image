@@ -19,7 +19,9 @@ import {
  */
 export async function GET(request: Request) {
     try {
+        console.log('[History API] GET - Checking R2 configuration...');
         if (!isR2Configured()) {
+            console.error('[History API] GET - R2 not configured');
             return NextResponse.json({
                 success: false,
                 error: 'R2 存储未配置',
@@ -29,8 +31,10 @@ export async function GET(request: Request) {
         // 从请求头获取 API Key，生成用户 ID
         const apiKey = request.headers.get('x-api-key') || '';
         const userId = getUserIdFromApiKey(apiKey);
+        console.log('[History API] GET - userId:', userId, 'apiKey length:', apiKey.length);
 
         const history = await loadHistory(userId);
+        console.log('[History API] GET - Loaded history items:', history.length);
 
         // 为每个记录添加图片 URL
         const historyWithUrls = history.map(item => ({
@@ -67,7 +71,9 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
     try {
+        console.log('[History API] POST - Starting...');
         if (!isR2Configured()) {
+            console.error('[History API] POST - R2 not configured');
             return NextResponse.json({
                 success: false,
                 error: 'R2 存储未配置',
@@ -77,11 +83,14 @@ export async function POST(request: Request) {
         // 从请求头获取 API Key，生成用户 ID
         const apiKey = request.headers.get('x-api-key') || '';
         const userId = getUserIdFromApiKey(apiKey);
+        console.log('[History API] POST - userId:', userId);
 
         const body = await request.json();
         const { imageData, prompt, mode, model, aspectRatio } = body;
+        console.log('[History API] POST - prompt:', prompt, 'mode:', mode, 'model:', model);
 
         if (!imageData || !prompt) {
+            console.error('[History API] POST - Missing params, imageData:', !!imageData, 'prompt:', !!prompt);
             return NextResponse.json({
                 success: false,
                 error: '缺少必要参数',
@@ -92,7 +101,9 @@ export async function POST(request: Request) {
         const id = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
         // 上传图片到 R2（按用户存储）
+        console.log('[History API] POST - Uploading image...');
         const imageKey = await uploadImage(imageData, id, userId);
+        console.log('[History API] POST - Image uploaded, key:', imageKey);
 
         // 创建历史记录项
         const historyItem: HistoryItem = {
@@ -106,7 +117,9 @@ export async function POST(request: Request) {
         };
 
         // 保存到用户的历史记录
+        console.log('[History API] POST - Saving history item...');
         const success = await addHistoryItem(userId, historyItem);
+        console.log('[History API] POST - Save result:', success);
 
         if (success) {
             return NextResponse.json({
