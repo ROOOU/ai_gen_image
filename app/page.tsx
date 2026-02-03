@@ -2,366 +2,274 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import OutpaintEditor from '@/components/OutpaintEditor';
-import HistoryPanel from '@/components/HistoryPanel';
 
 // --- Constants & Types ---
 
 const MODELS = [
-  { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: 'Fast & Efficient', supports4K: false },
-  { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: 'Professional Quality', supports4K: true },
+  { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: 'Fast & Efficient' },
+  { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: 'Professional Quality' },
 ];
 
 const ASPECT_RATIOS = [
-  { id: 'auto', name: '🔄 Auto' },
-  { id: '1:1', name: '1:1 Square' },
-  { id: '9:16', name: '9:16 Story' },
-  { id: '16:9', name: '16:9 Wide' },
-  { id: '3:2', name: '3:2 Photo' },
-  { id: '2:3', name: '2:3 Portrait' },
+  { id: '1:1', name: '1:1', icon: '正方形' },
+  { id: '9:16', name: '9:16', icon: '手机竖屏' },
+  { id: '16:9', name: '16:9', icon: '宽屏' },
+  { id: '3:2', name: '3:2', icon: '摄影' },
+  { id: '2:3', name: '2:3', icon: '肖像' },
 ];
 
-const RESOLUTIONS = [
-  { id: '1K', name: '1K Standard' },
-  { id: '2K', name: '2K HD' },
-  { id: '4K', name: '4K Ultra' },
-];
-
-const MAX_IMAGES = 10;
-
-interface UploadedImage { data: string; name: string; mimeType: string; }
-interface GeneratedImage { data: string; mimeType: string; }
-interface OutpaintData {
-  compositeImage: string; maskImage: string; originalImage: string;
-  originalX: number; originalY: number; originalWidth: number; originalHeight: number;
-  width: number; height: number; targetWidth: number; targetHeight: number; scale: number;
+interface HistoryItem {
+  id: string;
+  timestamp: number;
+  prompt: string;
+  mode: 'text2img' | 'img2img' | 'outpaint';
+  model: string;
+  imageUrl: string;
+  thumbnailUrl?: string;
 }
 
-// --- Component ---
+// --- Main Component ---
 
 export default function Home() {
-  // UI State
-  const [activeTab, setActiveTab] = useState<'create' | 'gallery' | 'history'>('create');
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [activeView, setActiveView] = useState<'inspiration' | 'generate' | 'assets' | 'canvas' | 'api'>('generate');
+  const [activeCategory, setActiveCategory] = useState('图片');
 
-  // Auth & Settings
+  // States carry over from previous logic
   const [apiKey, setApiKey] = useState('');
-  const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'testing' | 'valid' | 'invalid'>('idle');
-  const [statusMsg, setStatusMsg] = useState('');
-
-  // Generation State
-  const [activeMode, setActiveMode] = useState<'text2img' | 'img2img' | 'outpaint'>('text2img');
-  const [selectedModel, setSelectedModel] = useState(MODELS[1].id);
-  const [selectedRatio, setSelectedRatio] = useState('auto');
-  const [selectedResolution, setSelectedResolution] = useState('1K');
   const [prompt, setPrompt] = useState('');
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [selectedModel, setSelectedModel] = useState(MODELS[1].id);
+  const [selectedRatio, setSelectedRatio] = useState('1:1');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [resultImages, setResultImages] = useState<GeneratedImage[]>([]);
-  const [resultText, setResultText] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [resultImage, setResultImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [outpaintData, setOutpaintData] = useState<OutpaintData | null>(null);
+  const [activeMode, setActiveMode] = useState<'text2img' | 'img2img' | 'outpaint'>('text2img');
+  const [outpaintData, setOutpaintData] = useState<any>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Persistence
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_api_key');
     if (savedKey) setApiKey(savedKey);
+    loadHistory();
   }, []);
 
-  // Auto-switch to gallery on mobile when generating
-  useEffect(() => {
-    if (isGenerating && window.innerWidth < 1024) setActiveTab('gallery');
-  }, [isGenerating]);
-
-  // --- Handlers ---
-
-  const testApiKey = async (keyToTest: string) => {
-    if (!keyToTest.trim()) return;
-    setApiKeyStatus('testing');
+  const loadHistory = async () => {
+    const key = localStorage.getItem('gemini_api_key');
+    if (!key) return;
     try {
-      const res = await fetch('/api/gemini', { headers: { 'x-api-key': keyToTest.trim() } });
+      const res = await fetch('/api/history', { headers: { 'x-api-key': key } });
       const data = await res.json();
-      if (data.success) {
-        setApiKeyStatus('valid');
-        localStorage.setItem('gemini_api_key', keyToTest.trim());
-        setStatusMsg('API Key Verified Successfully');
-      } else {
-        setApiKeyStatus('invalid');
-        setStatusMsg(data.error || 'Invalid API Key');
-      }
-    } catch {
-      setApiKeyStatus('invalid');
-      setStatusMsg('Connection Error');
-    }
-    setTimeout(() => setStatusMsg(''), 3000);
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    const newImgs: UploadedImage[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          setUploadedImages(prev => [...prev, { data: ev.target?.result as string, name: file.name, mimeType: file.type }]);
-        };
-        reader.readAsDataURL(file);
-      }
-    }
+      if (data.success) setHistory(data.history);
+    } catch (err) { console.error('Failed to load history', err); }
   };
 
   const handleGenerate = async () => {
-    if (!apiKey) { setError('Please set your API Key first'); return; }
-    if (isGenerating) return;
-
+    if (!apiKey) { setError('请先配置 API Key'); setActiveView('api'); return; }
     setIsGenerating(true);
     setError(null);
-    setResultImages([]);
-
     try {
-      const body: any = {
-        model: selectedModel,
-        prompt: prompt.trim() || (activeMode === 'outpaint' ? 'Expand this image' : 'A beautiful photo'),
-      };
-
+      const body: any = { model: selectedModel, prompt: prompt.trim() || 'A masterpiece' };
+      if (selectedRatio) body.aspectRatio = selectedRatio;
       if (activeMode === 'outpaint' && outpaintData) {
         body.images = [
           { data: outpaintData.compositeImage, mimeType: 'image/jpeg' },
           { data: outpaintData.maskImage, mimeType: 'image/png' }
         ];
-      } else if (activeMode === 'img2img' && uploadedImages.length > 0) {
-        body.images = uploadedImages.map(img => ({ data: img.data, mimeType: img.mimeType }));
       }
-
-      if (selectedRatio !== 'auto') body.aspectRatio = selectedRatio;
-
       const res = await fetch('/api/gemini', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey.trim() },
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
         body: JSON.stringify(body)
       });
-
       const data = await res.json();
       if (data.success) {
-        setResultImages(data.images || []);
-        setResultText(data.text || null);
-
-        // Save to History
-        if (data.images?.[0]) {
-          fetch('/api/history', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey.trim() },
-            body: JSON.stringify({
-              imageData: data.images[0].data,
-              prompt: body.prompt,
-              mode: activeMode,
-              model: selectedModel
-            })
-          }).catch(console.error);
-        }
-      } else {
-        setError(data.error || 'Generation failed');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Network error');
-    } finally {
-      setIsGenerating(false);
-    }
+        setResultImage(data.images[0].data);
+        // Trigger history save
+        await fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+          body: JSON.stringify({ imageData: data.images[0].data, prompt: body.prompt, mode: activeMode, model: selectedModel })
+        });
+        loadHistory();
+      } else { setError(data.error); }
+    } catch (err: any) { setError(err.message); }
+    finally { setIsGenerating(false); }
   };
 
-  const downloadImage = (img: GeneratedImage) => {
-    const link = document.createElement('a');
-    link.href = img.data;
-    link.download = `banana-${Date.now()}.jpg`;
-    link.click();
-  };
-
-  // --- Render Sections ---
-
-  const renderSidebar = () => (
-    <aside className={`panel ${activeTab === 'create' ? 'mobile-visible' : ''}`}>
-      <div className="panel-header">
-        <span style={{ fontSize: 24 }}>🍌</span>
-        <span className="logo-text">Nano Banana</span>
-      </div>
-
-      <div className="panel-content">
-        {/* API Section */}
-        <section>
-          <h2>Credentials</h2>
-          <div className="textarea-wrapper" style={{ minHeight: 'auto', padding: '10px 16px' }}>
-            <input
-              type="password"
-              placeholder="Google AI API Key"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              onBlur={() => testApiKey(apiKey)}
-              style={{ background: 'transparent', border: 'none', color: 'white', outline: 'none', width: '100%', fontSize: 13 }}
-            />
-          </div>
-          {statusMsg && <p style={{ fontSize: 11, color: apiKeyStatus === 'valid' ? 'var(--ios-success)' : 'var(--ios-danger)', marginTop: 8 }}>{statusMsg}</p>}
-        </section>
-
-        {/* Mode Switcher */}
-        <section>
-          <h2>Creation Mode</h2>
-          <div className="selection-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-            <button className={`selection-btn ${activeMode === 'text2img' ? 'active' : ''}`} onClick={() => setActiveMode('text2img')}>Text</button>
-            <button className={`selection-btn ${activeMode === 'img2img' ? 'active' : ''}`} onClick={() => setActiveMode('img2img')}>Ref</button>
-            <button className={`selection-btn ${activeMode === 'outpaint' ? 'active' : ''}`} onClick={() => setActiveMode('outpaint')}>Expand</button>
-          </div>
-        </section>
-
-        {/* Prompt Section */}
-        <section>
-          <h2>Prompt</h2>
-          <div className="textarea-wrapper">
-            <textarea
-              placeholder="Describe your imagination..."
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-            />
-          </div>
-        </section>
-
-        {/* Configuration */}
-        <section>
-          <h2>Parameters</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Aspect Ratio</p>
-              <div className="selection-grid">
-                {ASPECT_RATIOS.map(r => (
-                  <button key={r.id} className={`selection-btn ${selectedRatio === r.id ? 'active' : ''}`} onClick={() => setSelectedRatio(r.id)}>{r.name.split(' ')[0]}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Model & Speed</p>
-              <select
-                className="selection-btn"
-                style={{ width: '100%', textAlign: 'left', appearance: 'none' }}
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-              >
-                {MODELS.map(m => <option key={m.id} value={m.id}>{m.name} - {m.description}</option>)}
-              </select>
-            </div>
-          </div>
-        </section>
-
-        {/* Uploads (Conditional) */}
-        {activeMode === 'img2img' && (
-          <section>
-            <h2>References ({uploadedImages.length}/{MAX_IMAGES})</h2>
-            <div
-              style={{ padding: 12, border: '1px dashed var(--border-color)', borderRadius: 12, textAlign: 'center', cursor: 'pointer', fontSize: 13, color: 'var(--accent-primary)' }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              + Upload Images
-            </div>
-            <input ref={fileInputRef} type="file" multiple accept="image/*" hidden onChange={handleFileUpload} />
-          </section>
-        )}
-
-        {/* Outpaint Editor (Conditional) */}
-        {activeMode === 'outpaint' && (
-          <section>
-            <h2>Outpaint Canvas</h2>
-            <OutpaintEditor onCompositeReady={setOutpaintData} />
-          </section>
-        )}
-
-        <button
-          className="btn-primary"
-          disabled={isGenerating || (!prompt.trim() && activeMode !== 'outpaint')}
-          onClick={handleGenerate}
-          style={{ marginTop: 'auto' }}
-        >
-          {isGenerating ? '🎨 Crafting...' : '✨ Generate'}
-        </button>
-      </div>
-    </aside>
-  );
+  // Group history by date
+  const groupedHistory = history.reduce((groups: any, item) => {
+    const date = new Date(item.timestamp).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+    const today = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+    const label = date === today ? '今天' : date;
+    if (!groups[label]) groups[label] = [];
+    groups[label].push(item);
+    return groups;
+  }, {});
 
   return (
-    <div className="app-container">
-      {renderSidebar()}
+    <div className="pro-layout pro-theme">
+      {/* 🚀 左侧图标侧边栏 */}
+      <aside className="pro-sidebar">
+        <div className="pro-sidebar-logo">🍌</div>
+        <nav className="pro-nav-list">
+          <button className={`pro-nav-item ${activeView === 'inspiration' ? 'active' : ''}`} onClick={() => setActiveView('inspiration')}>
+            <span className="nav-icon">💡</span>
+            <span className="nav-label-small">灵感</span>
+          </button>
+          <button className={`pro-nav-item ${activeView === 'generate' ? 'active' : ''}`} onClick={() => setActiveView('generate')}>
+            <span className="nav-icon">✨</span>
+            <span className="nav-label-small">生成</span>
+          </button>
+          <button className={`pro-nav-item ${activeView === 'assets' ? 'active' : ''}`} onClick={() => setActiveView('assets')}>
+            <span className="nav-icon">📁</span>
+            <span className="nav-label-small">资产</span>
+          </button>
+          <button className={`pro-nav-item ${activeView === 'canvas' ? 'active' : ''}`} onClick={() => setActiveView('canvas')}>
+            <span className="nav-icon">🖼️</span>
+            <span className="nav-label-small">画布</span>
+          </button>
+        </nav>
+        <div className="pro-sidebar-bottom">
+          <button className={`pro-nav-item ${activeView === 'api' ? 'active' : ''}`} onClick={() => setActiveView('api')}>
+            <span className="nav-icon">⚙️</span>
+          </button>
+        </div>
+      </aside>
 
-      <main className={`main-stage ${activeTab === 'gallery' ? 'mobile-visible' : ''}`}>
-        <header className="canvas-header">
-          <h1 style={{ fontSize: 16, fontWeight: 600 }}>Workbench</h1>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button className="selection-btn" style={{ padding: '6px 12px' }} onClick={() => setIsHistoryOpen(true)}>📜 History</button>
+      {/* 🎬 主内容舞台 */}
+      <main className="pro-stage">
+        {/* 顶部导航 */}
+        <header className="pro-top-nav">
+          {['图片', '视频', '无限画布', '图片编辑器', '故事', '音频'].map(cat => (
+            <button
+              key={cat}
+              className={`top-cat-item ${activeCategory === cat ? 'active' : ''}`}
+              onClick={() => setActiveCategory(cat)}
+            >
+              {cat}
+            </button>
+          ))}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
+            <button className="top-cat-item">所有图片</button>
+            <button className="top-cat-item">超清</button>
+            <button className="top-cat-item">我的收藏</button>
           </div>
         </header>
 
-        <div className={`canvas-content ${isGenerating ? 'shimmer-active' : ''}`}>
-          {error ? (
-            <div style={{ color: 'var(--ios-danger)', textAlign: 'center' }}>
-              <p style={{ fontSize: 40 }}>⚠️</p>
-              <p>{error}</p>
-              <button className="ios-secondary-btn" style={{ marginTop: 12 }} onClick={() => setError(null)}>Retry</button>
-            </div>
-          ) : isGenerating ? (
-            <div style={{ textAlign: 'center' }}>
-              <div className="loading-spinner" style={{ width: 48, height: 48, marginBottom: 24 }}></div>
-              <p style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-secondary)' }}>AI is visualizing your thoughts...</p>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8 }}>Estimated time: 10-20 seconds</p>
-            </div>
-          ) : resultImages.length > 0 ? (
-            <div className="result-card">
-              <img src={resultImages[0].data} className="result-image" alt="Output" />
-              <div className="result-footer">
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="selection-btn" onClick={() => downloadImage(resultImages[0])}>📥 Download</button>
-                  <button className="selection-btn">🔗 Share</button>
+        {/* 视图内容切换 */}
+        <div className="pro-view-content">
+          {activeView === 'generate' && (
+            <div className="pro-workbench">
+              <div className="workbench-controls">
+                <div>
+                  <p className="pro-section-title">创作模式</p>
+                  <div className="selection-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                    <button className={`selection-btn ${activeMode === 'text2img' ? 'active' : ''}`} onClick={() => setActiveMode('text2img')}>文本</button>
+                    <button className={`selection-btn ${activeMode === 'img2img' ? 'active' : ''}`} onClick={() => setActiveMode('img2img')}>参考</button>
+                    <button className={`selection-btn ${activeMode === 'outpaint' ? 'active' : ''}`} onClick={() => setActiveMode('outpaint')}>扩图</button>
+                  </div>
                 </div>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Generated with {MODELS.find(m => m.id === selectedModel)?.name}</p>
+
+                <div>
+                  <p className="pro-section-title">提示词</p>
+                  <textarea
+                    className="pro-input-group"
+                    style={{ width: '100%', height: 120, background: '#0A0A0B', border: '1px solid #222', padding: 12, fontSize: 13 }}
+                    placeholder="描述你想要的画面..."
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <p className="pro-section-title">图片比例</p>
+                  <div className="selection-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                    {ASPECT_RATIOS.map(r => (
+                      <button key={r.id} className={`selection-btn ${selectedRatio === r.id ? 'active' : ''}`} onClick={() => setSelectedRatio(r.id)}>{r.name}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  className="btn-primary"
+                  style={{ marginTop: 'auto', background: 'var(--pro-accent)', color: '#000' }}
+                  disabled={isGenerating}
+                  onClick={handleGenerate}
+                >
+                  {isGenerating ? '生成中...' : '开始生成'}
+                </button>
               </div>
-              {resultText && (
-                <div style={{ padding: '0 24px 20px', fontSize: 13, color: 'var(--text-secondary)', borderTop: '0.5px solid var(--border-color)', paddingTop: 16 }}>
-                  {resultText}
+
+              <div className="workbench-canvas">
+                {isGenerating ? (
+                  <div style={{ textAlign: 'center' }}>
+                    <div className="loading-spinner" style={{ width: 48, height: 48, borderColor: 'var(--pro-accent) transparent transparent transparent' }}></div>
+                    <p style={{ marginTop: 20, color: 'var(--pro-text-dim)' }}>正在构思艺术品...</p>
+                  </div>
+                ) : resultImage ? (
+                  <div style={{ maxWidth: '100%', maxHeight: '100%' }}>
+                    <img src={resultImage} style={{ maxWidth: '100%', borderRadius: 8 }} alt="Result" />
+                  </div>
+                ) : activeMode === 'outpaint' ? (
+                  <div style={{ width: '100%', maxWidth: 600 }}><OutpaintEditor onCompositeReady={setOutpaintData} /></div>
+                ) : (
+                  <div style={{ textAlign: 'center', opacity: 0.3 }}>
+                    <span style={{ fontSize: 64 }}>🍌</span>
+                    <p>准备好开始创作了吗？</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeView === 'assets' && (
+            <div className="pro-assets-view">
+              {Object.keys(groupedHistory).length > 0 ? Object.entries(groupedHistory).map(([date, items]: [string, any]) => (
+                <div key={date} className="date-group">
+                  <h3 className="date-group-title">{date}</h3>
+                  <div className="asset-grid">
+                    {items.map((item: HistoryItem) => (
+                      <div key={item.id} className="asset-card" onClick={() => { setResultImage(item.imageUrl); setPrompt(item.prompt); setActiveView('generate'); }}>
+                        <img src={item.thumbnailUrl || item.imageUrl} alt={item.prompt} loading="lazy" />
+                        <div className="asset-card-overlay">
+                          <p style={{ fontSize: 10, color: '#fff' }}>{item.prompt.slice(0, 20)}...</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )) : (
+                <div style={{ textAlign: 'center', padding: '100px 0', opacity: 0.5 }}>
+                  <p style={{ fontSize: 48 }}>📭</p>
+                  <p>暂无资产记录</p>
                 </div>
               )}
             </div>
-          ) : (
-            <div style={{ textAlign: 'center', opacity: 0.5 }}>
-              <p style={{ fontSize: 80 }}>🌴</p>
-              <h2 style={{ textTransform: 'none', color: 'white', fontSize: 24, marginTop: 16 }}>Ready to Create?</h2>
-              <p style={{ fontSize: 15, color: 'var(--text-secondary)' }}>Input a prompt or upload an image to start.</p>
+          )}
+
+          {activeView === 'api' && (
+            <div style={{ maxWidth: 400, margin: '100px auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <h2 style={{ textAlign: 'center' }}>API 配置</h2>
+              <div className="pro-input-group">
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => { setApiKey(e.target.value); localStorage.setItem('gemini_api_key', e.target.value); }}
+                  placeholder="Google AI API Key"
+                  style={{ width: '100%', background: 'transparent', border: 'none', color: '#fff', outline: 'none' }}
+                />
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--pro-text-dim)', textAlign: 'center' }}>Key 安全存储在本地浏览器中</p>
+            </div>
+          )}
+
+          {activeView === 'inspiration' && (
+            <div style={{ textAlign: 'center', padding: '100px 0', opacity: 0.5 }}>
+              <h2>灵感模块开发中...</h2>
+              <p>敬请期待更多创意内容</p>
             </div>
           )}
         </div>
       </main>
-
-      {/* History Panel Integration (Handled by existing component) */}
-      <HistoryPanel
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        onSelectItem={(item) => {
-          setResultImages([{ data: item.imageUrl, mimeType: 'image/jpeg' }]);
-          setPrompt(item.prompt);
-          setIsHistoryOpen(false);
-        }}
-        apiKey={apiKey}
-      />
-
-      {/* Mobile Nav */}
-      <nav className="floating-nav">
-        <div className={`nav-item ${activeTab === 'create' ? 'active' : ''}`} onClick={() => setActiveTab('create')}>
-          <span>✍️</span> <span>Create</span>
-        </div>
-        <div className={`nav-item ${activeTab === 'gallery' ? 'active' : ''}`} onClick={() => setActiveTab('gallery')}>
-          <span>🖼️</span> <span>Gallery</span>
-        </div>
-        <div className={`nav-item ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setIsHistoryOpen(true)}>
-          <span>📜</span> <span>Archive</span>
-        </div>
-      </nav>
     </div>
   );
 }
