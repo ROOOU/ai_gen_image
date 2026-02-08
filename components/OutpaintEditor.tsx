@@ -19,23 +19,14 @@ interface OutpaintEditorProps {
     }) => void;
 }
 
-const EXPAND_PRESETS = [
-    { id: 'center', name: '居中', icon: '◻️', description: '居中扩展' },
-    { id: 'top', name: '向上', icon: '⬆️', description: '向上扩展' },
-    { id: 'bottom', name: '向下', icon: '⬇️', description: '向下扩展' },
-    { id: 'left', name: '向左', icon: '⬅️', description: '向左扩展' },
-    { id: 'right', name: '向右', icon: '➡️', description: '向右扩展' },
-    { id: 'top-left', name: '左上', icon: '↖️', description: '左上扩展' },
-    { id: 'top-right', name: '右上', icon: '↗️', description: '右上扩展' },
-    { id: 'bottom-left', name: '左下', icon: '↙️', description: '左下扩展' },
-    { id: 'bottom-right', name: '右下', icon: '↘️', description: '右下扩展' },
-];
-
-const SCALE_OPTIONS = [
-    { id: '1.5x', scale: 1.5, name: '1.5x', description: '扩大 50%' },
-    { id: '2x', scale: 2.0, name: '2x', description: '扩大 100%' },
-    { id: '2.5x', scale: 2.5, name: '2.5x', description: '扩大 150%' },
-    { id: '3x', scale: 3.0, name: '3x', description: '扩大 200%' },
+const ASPECT_RATIOS = [
+    { id: '1:1', ratio: 1, name: '1:1' },
+    { id: '9:16', ratio: 9/16, name: '9:16' },
+    { id: '16:9', ratio: 16/9, name: '16:9' },
+    { id: '3:2', ratio: 3/2, name: '3:2' },
+    { id: '2:3', ratio: 2/3, name: '2:3' },
+    { id: '4:3', ratio: 4/3, name: '4:3' },
+    { id: '3:4', ratio: 3/4, name: '3:4' },
 ];
 
 export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps) {
@@ -43,18 +34,34 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
     const [originalDataUrl, setOriginalDataUrl] = useState<string>('');
     const [canvasWidth, setCanvasWidth] = useState(1024);
     const [canvasHeight, setCanvasHeight] = useState(1024);
-    const [selectedScale, setSelectedScale] = useState('2x');
+    const [selectedRatio, setSelectedRatio] = useState('1:1');
     const [imageX, setImageX] = useState(0.25);
     const [imageY, setImageY] = useState(0.25);
     const [isDragging, setIsDragging] = useState(false);
+    const [isResizing, setIsResizing] = useState(false);
+    const [resizeEdge, setResizeEdge] = useState<string | null>(null);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [dragImageStart, setDragImageStart] = useState({ x: 0, y: 0 });
-    const [activePreset, setActivePreset] = useState('center');
+    const [resizeStart, setResizeStart] = useState({ width: 0, height: 0, x: 0, y: 0 });
     const [showGrid, setShowGrid] = useState(true);
+    const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const updateSize = () => {
+            if (wrapperRef.current) {
+                const rect = wrapperRef.current.getBoundingClientRect();
+                setContainerSize({ width: rect.width, height: rect.height });
+            }
+        };
+        updateSize();
+        window.addEventListener('resize', updateSize);
+        return () => window.removeEventListener('resize', updateSize);
+    }, []);
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -77,83 +84,51 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
             const img = new Image();
             img.onload = () => {
                 setOriginalImage(img);
-                const scale = SCALE_OPTIONS.find(s => s.id === selectedScale)?.scale || 2;
-                setCanvasWidth(Math.round(img.width * scale));
-                setCanvasHeight(Math.round(img.height * scale));
-                applyPreset('center', img, scale);
+                const ratioObj = ASPECT_RATIOS.find(r => r.id === selectedRatio);
+                const targetRatio = ratioObj ? ratioObj.ratio : 1;
+                
+                let newWidth, newHeight;
+                const imgRatio = img.width / img.height;
+                
+                if (imgRatio > targetRatio) {
+                    newWidth = Math.max(img.width * 1.5, 1024);
+                    newHeight = newWidth / targetRatio;
+                } else {
+                    newHeight = Math.max(img.height * 1.5, 1024);
+                    newWidth = newHeight * targetRatio;
+                }
+                
+                setCanvasWidth(Math.round(newWidth));
+                setCanvasHeight(Math.round(newHeight));
+                setImageX((1 - img.width / newWidth) / 2);
+                setImageY((1 - img.height / newHeight) / 2);
             };
             img.src = dataUrl;
         };
         reader.readAsDataURL(file);
     };
 
-    const applyPreset = (presetId: string, img?: HTMLImageElement, scale?: number) => {
-        const image = img || originalImage;
-        const currentScale = scale || (SCALE_OPTIONS.find(s => s.id === selectedScale)?.scale || 2);
-        
-        if (!image) return;
-
-        const newWidth = Math.round(image.width * currentScale);
-        const newHeight = Math.round(image.height * currentScale);
-        const imgRatioX = image.width / newWidth;
-        const imgRatioY = image.height / newHeight;
-
-        setActivePreset(presetId);
-
-        switch (presetId) {
-            case 'top':
-                setImageX((1 - imgRatioX) / 2);
-                setImageY(1 - imgRatioY);
-                break;
-            case 'bottom':
-                setImageX((1 - imgRatioX) / 2);
-                setImageY(0);
-                break;
-            case 'left':
-                setImageX(1 - imgRatioX);
-                setImageY((1 - imgRatioY) / 2);
-                break;
-            case 'right':
-                setImageX(0);
-                setImageY((1 - imgRatioY) / 2);
-                break;
-            case 'top-left':
-                setImageX(1 - imgRatioX);
-                setImageY(1 - imgRatioY);
-                break;
-            case 'top-right':
-                setImageX(0);
-                setImageY(1 - imgRatioY);
-                break;
-            case 'bottom-left':
-                setImageX(1 - imgRatioX);
-                setImageY(0);
-                break;
-            case 'bottom-right':
-                setImageX(0);
-                setImageY(0);
-                break;
-            case 'center':
-            default:
-                setImageX((1 - imgRatioX) / 2);
-                setImageY((1 - imgRatioY) / 2);
-                break;
-        }
-    };
-
-    const handleScaleChange = (scaleId: string) => {
-        setSelectedScale(scaleId);
+    const handleRatioChange = (ratioId: string) => {
+        setSelectedRatio(ratioId);
         if (!originalImage) return;
         
-        const scale = SCALE_OPTIONS.find(s => s.id === scaleId)?.scale || 2;
-        const newWidth = Math.round(originalImage.width * scale);
-        const newHeight = Math.round(originalImage.height * scale);
+        const ratioObj = ASPECT_RATIOS.find(r => r.id === ratioId);
+        if (!ratioObj) return;
         
+        const targetRatio = ratioObj.ratio;
         const currentCenterX = imageX + (originalImage.width / canvasWidth) / 2;
         const currentCenterY = imageY + (originalImage.height / canvasHeight) / 2;
         
-        setCanvasWidth(newWidth);
-        setCanvasHeight(newHeight);
+        let newWidth = canvasWidth;
+        let newHeight = newWidth / targetRatio;
+        
+        if (newHeight < originalImage.height * 1.2) {
+            newHeight = originalImage.height * 1.2;
+            newWidth = newHeight * targetRatio;
+        }
+        
+        setCanvasWidth(Math.round(newWidth));
+        setCanvasHeight(Math.round(newHeight));
         
         const newImgRatioX = originalImage.width / newWidth;
         const newImgRatioY = originalImage.height / newHeight;
@@ -201,10 +176,10 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                 height: canvasHeight,
                 targetWidth: canvasWidth,
                 targetHeight: canvasHeight,
-                scale: SCALE_OPTIONS.find(s => s.id === selectedScale)?.scale || 2,
+                scale: canvasWidth / originalImage.width,
             });
         }
-    }, [originalImage, originalDataUrl, canvasWidth, canvasHeight, imageX, imageY, selectedScale, onCompositeReady]);
+    }, [originalImage, originalDataUrl, canvasWidth, canvasHeight, imageX, imageY, onCompositeReady]);
 
     useEffect(() => {
         if (originalImage) {
@@ -213,29 +188,77 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
     }, [originalImage, imageX, imageY, canvasWidth, canvasHeight, generateComposite]);
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        if (!originalImage) return;
+        if (!originalImage || isResizing) return;
         setIsDragging(true);
         setDragStart({ x: e.clientX, y: e.clientY });
         setDragImageStart({ x: imageX, y: imageY });
     };
 
+    const handleResizeStart = (e: React.MouseEvent, edge: string) => {
+        e.stopPropagation();
+        if (!originalImage) return;
+        setIsResizing(true);
+        setResizeEdge(edge);
+        setResizeStart({ 
+            width: canvasWidth, 
+            height: canvasHeight,
+            x: e.clientX,
+            y: e.clientY 
+        });
+    };
+
     const handleMouseMove = useCallback((e: MouseEvent) => {
-        if (!isDragging || !containerRef.current || !originalImage) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        const dx = (e.clientX - dragStart.x) / rect.width;
-        const dy = (e.clientY - dragStart.y) / rect.height;
-        const maxX = 1 - (originalImage.width / canvasWidth);
-        const maxY = 1 - (originalImage.height / canvasHeight);
-        setImageX(Math.max(0, Math.min(dragImageStart.x + dx, maxX)));
-        setImageY(Math.max(0, Math.min(dragImageStart.y + dy, maxY)));
-    }, [isDragging, dragStart, dragImageStart, canvasWidth, canvasHeight, originalImage]);
+        if (isDragging && containerRef.current && originalImage) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const dx = (e.clientX - dragStart.x) / rect.width;
+            const dy = (e.clientY - dragStart.y) / rect.height;
+            const maxX = 1 - (originalImage.width / canvasWidth);
+            const maxY = 1 - (originalImage.height / canvasHeight);
+            setImageX(Math.max(0, Math.min(dragImageStart.x + dx, maxX)));
+            setImageY(Math.max(0, Math.min(dragImageStart.y + dy, maxY)));
+        }
+        
+        if (isResizing && resizeEdge && originalImage) {
+            const ratioObj = ASPECT_RATIOS.find(r => r.id === selectedRatio);
+            const targetRatio = ratioObj ? ratioObj.ratio : (canvasWidth / canvasHeight);
+            
+            const dx = e.clientX - resizeStart.x;
+            const dy = e.clientY - resizeStart.y;
+            
+            let newWidth = resizeStart.width;
+            let newHeight = resizeStart.height;
+            
+            const scaleFactor = 2;
+            
+            if (resizeEdge.includes('right')) {
+                newWidth = Math.max(originalImage.width * 1.1, resizeStart.width + dx * scaleFactor);
+                newHeight = newWidth / targetRatio;
+            } else if (resizeEdge.includes('left')) {
+                newWidth = Math.max(originalImage.width * 1.1, resizeStart.width - dx * scaleFactor);
+                newHeight = newWidth / targetRatio;
+            } else if (resizeEdge.includes('bottom')) {
+                newHeight = Math.max(originalImage.height * 1.1, resizeStart.height + dy * scaleFactor);
+                newWidth = newHeight * targetRatio;
+            } else if (resizeEdge.includes('top')) {
+                newHeight = Math.max(originalImage.height * 1.1, resizeStart.height - dy * scaleFactor);
+                newWidth = newHeight * targetRatio;
+            }
+            
+            if (newWidth >= originalImage.width * 1.1 && newHeight >= originalImage.height * 1.1) {
+                setCanvasWidth(Math.round(newWidth));
+                setCanvasHeight(Math.round(newHeight));
+            }
+        }
+    }, [isDragging, isResizing, resizeEdge, dragStart, dragImageStart, canvasWidth, canvasHeight, originalImage, resizeStart, selectedRatio]);
 
     const handleMouseUp = useCallback(() => {
         setIsDragging(false);
+        setIsResizing(false);
+        setResizeEdge(null);
     }, []);
 
     useEffect(() => {
-        if (isDragging) {
+        if (isDragging || isResizing) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
             return () => {
@@ -243,54 +266,64 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                 window.removeEventListener('mouseup', handleMouseUp);
             };
         }
-    }, [isDragging, handleMouseMove, handleMouseUp]);
+    }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
     const clearImage = () => {
         setOriginalImage(null);
         setOriginalDataUrl('');
-        setActivePreset('center');
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
     };
 
+    const getDisplayDimensions = () => {
+        if (!containerSize.width || !originalImage) return { width: 0, height: 0 };
+        const maxWidth = containerSize.width;
+        const aspectRatio = canvasWidth / canvasHeight;
+        let displayWidth = maxWidth;
+        let displayHeight = maxWidth / aspectRatio;
+        
+        if (displayHeight > 400) {
+            displayHeight = 400;
+            displayWidth = displayHeight * aspectRatio;
+        }
+        
+        return { width: displayWidth, height: displayHeight };
+    };
+
+    const displayDims = getDisplayDimensions();
+
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} ref={wrapperRef}>
             {!originalImage ? (
                 <div
                     style={{
                         padding: '40px 24px',
-                        border: '2px dashed var(--pro-border)',
+                        border: '2px dashed var(--border)',
                         borderRadius: 12,
                         textAlign: 'center',
                         cursor: 'pointer',
-                        background: 'var(--pro-bg-secondary)',
+                        background: 'var(--bg-tertiary)',
                         transition: 'all 0.2s ease',
                     }}
                     onClick={() => fileInputRef.current?.click()}
                     onDragOver={(e) => {
                         e.preventDefault();
-                        e.currentTarget.style.borderColor = 'var(--pro-accent)';
-                        e.currentTarget.style.background = 'rgba(51, 197, 255, 0.05)';
+                        e.currentTarget.style.borderColor = 'var(--accent)';
                     }}
                     onDragLeave={(e) => {
                         e.preventDefault();
-                        e.currentTarget.style.borderColor = 'var(--pro-border)';
-                        e.currentTarget.style.background = 'var(--pro-bg-secondary)';
+                        e.currentTarget.style.borderColor = 'var(--border)';
                     }}
                     onDrop={(e) => {
                         e.preventDefault();
-                        e.currentTarget.style.borderColor = 'var(--pro-border)';
-                        e.currentTarget.style.background = 'var(--pro-bg-secondary)';
+                        e.currentTarget.style.borderColor = 'var(--border)';
                         const file = e.dataTransfer.files[0];
-                        if (file) {
-                            const input = fileInputRef.current;
-                            if (input) {
-                                const dt = new DataTransfer();
-                                dt.items.add(file);
-                                input.files = dt.files;
-                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                            }
+                        if (file && fileInputRef.current) {
+                            const dt = new DataTransfer();
+                            dt.items.add(file);
+                            fileInputRef.current.files = dt.files;
+                            fileInputRef.current.dispatchEvent(new Event('change', { bubbles: true }));
                         }
                     }}
                 >
@@ -299,7 +332,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                         height: 56,
                         margin: '0 auto 16px',
                         borderRadius: '50%',
-                        background: 'var(--pro-bg-tertiary)',
+                        background: 'var(--bg-hover)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -309,7 +342,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                     </div>
                     <p style={{
                         fontSize: 15,
-                        color: 'var(--pro-text-main)',
+                        color: 'var(--text-primary)',
                         marginBottom: 8,
                         fontWeight: 500,
                     }}>
@@ -317,91 +350,46 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                     </p>
                     <p style={{
                         fontSize: 12,
-                        color: 'var(--pro-text-dim)',
+                        color: 'var(--text-secondary)',
                     }}>
                         支持拖拽上传，最大 10MB
                     </p>
                 </div>
             ) : (
                 <>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: 12,
-                    }}>
-                        <div>
-                            <p style={{
-                                fontSize: 12,
-                                color: 'var(--pro-text-dim)',
-                                marginBottom: 8,
-                                fontWeight: 500,
-                            }}>扩展比例</p>
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(2, 1fr)',
-                                gap: 8,
-                            }}>
-                                {SCALE_OPTIONS.map(s => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => handleScaleChange(s.id)}
-                                        style={{
-                                            padding: '10px 8px',
-                                            background: selectedScale === s.id 
-                                                ? 'var(--pro-accent)' 
-                                                : 'var(--pro-bg-tertiary)',
-                                            border: 'none',
-                                            borderRadius: 8,
-                                            color: selectedScale === s.id ? '#000' : 'var(--pro-text-dim)',
-                                            fontSize: 13,
-                                            fontWeight: selectedScale === s.id ? 600 : 500,
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease',
-                                        }}
-                                    >
-                                        {s.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div>
-                            <p style={{
-                                fontSize: 12,
-                                color: 'var(--pro-text-dim)',
-                                marginBottom: 8,
-                                fontWeight: 500,
-                            }}>扩展方向</p>
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(3, 1fr)',
-                                gap: 6,
-                            }}>
-                                {EXPAND_PRESETS.map(p => (
-                                    <button
-                                        key={p.id}
-                                        onClick={() => applyPreset(p.id)}
-                                        title={p.description}
-                                        style={{
-                                            padding: '8px 4px',
-                                            background: activePreset === p.id 
-                                                ? 'var(--pro-accent-glow)' 
-                                                : 'var(--pro-bg-tertiary)',
-                                            border: `1px solid ${activePreset === p.id ? 'var(--pro-accent)' : 'transparent'}`,
-                                            borderRadius: 6,
-                                            color: activePreset === p.id ? 'var(--pro-accent)' : 'var(--pro-text-dim)',
-                                            fontSize: 16,
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s ease',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                        }}
-                                    >
-                                        {p.icon}
-                                    </button>
-                                ))}
-                            </div>
+                    <div>
+                        <p style={{
+                            fontSize: 12,
+                            color: 'var(--text-secondary)',
+                            marginBottom: 8,
+                            fontWeight: 500,
+                        }}>画布比例</p>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(4, 1fr)',
+                            gap: 8,
+                        }}>
+                            {ASPECT_RATIOS.map(r => (
+                                <button
+                                    key={r.id}
+                                    onClick={() => handleRatioChange(r.id)}
+                                    style={{
+                                        padding: '10px 8px',
+                                        background: selectedRatio === r.id 
+                                            ? 'var(--accent)' 
+                                            : 'var(--bg-tertiary)',
+                                        border: 'none',
+                                        borderRadius: 8,
+                                        color: selectedRatio === r.id ? '#000' : 'var(--text-secondary)',
+                                        fontSize: 13,
+                                        fontWeight: selectedRatio === r.id ? 600 : 500,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                    }}
+                                >
+                                    {r.name}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
@@ -410,7 +398,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         padding: '8px 12px',
-                        background: 'var(--pro-bg-secondary)',
+                        background: 'var(--bg-tertiary)',
                         borderRadius: 8,
                     }}>
                         <label style={{
@@ -418,7 +406,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                             alignItems: 'center',
                             gap: 8,
                             fontSize: 13,
-                            color: 'var(--pro-text-dim)',
+                            color: 'var(--text-secondary)',
                             cursor: 'pointer',
                         }}>
                             <input
@@ -431,7 +419,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                         </label>
                         <span style={{
                             fontSize: 11,
-                            color: 'var(--pro-text-muted)',
+                            color: 'var(--text-muted)',
                         }}>
                             {canvasWidth} x {canvasHeight} px
                         </span>
@@ -439,56 +427,194 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
 
                     <div
                         ref={containerRef}
-                        onMouseDown={handleMouseDown}
                         style={{
-                            aspectRatio: `${canvasWidth}/${canvasHeight}`,
+                            width: displayDims.width || '100%',
+                            height: displayDims.height || 300,
                             maxHeight: 400,
                             background: '#1a1a1a',
                             borderRadius: 12,
                             position: 'relative',
-                            overflow: 'hidden',
-                            border: '2px solid var(--pro-border)',
-                            cursor: isDragging ? 'grabbing' : 'grab',
+                            overflow: 'visible',
+                            border: '2px solid var(--border)',
+                            margin: '0 auto',
                         }}
                     >
-                        <div style={{
-                            position: 'absolute',
-                            left: `${imageX * 100}%`,
-                            top: `${imageY * 100}%`,
-                            width: `${(originalImage.width / canvasWidth) * 100}%`,
-                            height: `${(originalImage.height / canvasHeight) * 100}%`,
-                            boxShadow: '0 4px 20px rgba(0,0,0,0.5), 0 0 0 2px var(--pro-accent)',
-                            zIndex: 2,
-                            borderRadius: 4,
-                            overflow: 'hidden',
-                        }}>
-                            <img
-                                src={originalDataUrl}
-                                style={{ width: '100%', height: '100%', display: 'block', objectFit: 'fill' }}
-                                alt="Original"
-                                draggable={false}
-                            />
-                        </div>
-
-                        {showGrid && (
+                        <div
+                            onMouseDown={handleMouseDown}
+                            style={{
+                                position: 'absolute',
+                                left: 0,
+                                top: 0,
+                                width: '100%',
+                                height: '100%',
+                                cursor: isDragging ? 'grabbing' : 'grab',
+                            }}
+                        >
                             <div style={{
                                 position: 'absolute',
-                                inset: 0,
-                                backgroundImage: `
-                                    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                                    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
-                                `,
-                                backgroundSize: '20% 20%',
+                                left: `${imageX * 100}%`,
+                                top: `${imageY * 100}%`,
+                                width: `${(originalImage.width / canvasWidth) * 100}%`,
+                                height: `${(originalImage.height / canvasHeight) * 100}%`,
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.5), 0 0 0 2px var(--accent)',
+                                zIndex: 2,
+                                borderRadius: 4,
+                                overflow: 'hidden',
                                 pointerEvents: 'none',
-                            }} />
-                        )}
+                            }}>
+                                <img
+                                    src={originalDataUrl}
+                                    style={{ width: '100%', height: '100%', display: 'block', objectFit: 'fill' }}
+                                    alt="Original"
+                                    draggable={false}
+                                />
+                            </div>
 
-                        <div style={{
-                            position: 'absolute',
-                            inset: 0,
-                            opacity: 0.05,
-                            background: 'url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAAXNSR0IArs4c6QAAACpJREFUGFdjZEACDAwMgAIsDAwMMMYMBgYmBqBBjCAMY8xgAApADYIxEAYAbDQDAsMND8IAAAAASUVORK5CYII=")',
-                        }} />
+                            {showGrid && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    backgroundImage: `
+                                        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+                                        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)
+                                    `,
+                                    backgroundSize: '25% 25%',
+                                    pointerEvents: 'none',
+                                }} />
+                            )}
+                        </div>
+
+                        {/* Resize handles */}
+                        <div 
+                            onMouseDown={(e) => handleResizeStart(e, 'top')}
+                            style={{
+                                position: 'absolute',
+                                top: -6,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                width: 40,
+                                height: 12,
+                                background: 'var(--accent)',
+                                borderRadius: 6,
+                                cursor: 'ns-resize',
+                                zIndex: 10,
+                                opacity: isResizing && resizeEdge === 'top' ? 1 : 0.7,
+                            }}
+                            title="向上扩展"
+                        />
+                        <div 
+                            onMouseDown={(e) => handleResizeStart(e, 'bottom')}
+                            style={{
+                                position: 'absolute',
+                                bottom: -6,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                width: 40,
+                                height: 12,
+                                background: 'var(--accent)',
+                                borderRadius: 6,
+                                cursor: 'ns-resize',
+                                zIndex: 10,
+                                opacity: isResizing && resizeEdge === 'bottom' ? 1 : 0.7,
+                            }}
+                            title="向下扩展"
+                        />
+                        <div 
+                            onMouseDown={(e) => handleResizeStart(e, 'left')}
+                            style={{
+                                position: 'absolute',
+                                left: -6,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                width: 12,
+                                height: 40,
+                                background: 'var(--accent)',
+                                borderRadius: 6,
+                                cursor: 'ew-resize',
+                                zIndex: 10,
+                                opacity: isResizing && resizeEdge === 'left' ? 1 : 0.7,
+                            }}
+                            title="向左扩展"
+                        />
+                        <div 
+                            onMouseDown={(e) => handleResizeStart(e, 'right')}
+                            style={{
+                                position: 'absolute',
+                                right: -6,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                width: 12,
+                                height: 40,
+                                background: 'var(--accent)',
+                                borderRadius: 6,
+                                cursor: 'ew-resize',
+                                zIndex: 10,
+                                opacity: isResizing && resizeEdge === 'right' ? 1 : 0.7,
+                            }}
+                            title="向右扩展"
+                        />
+
+                        {/* Corner handles */}
+                        <div 
+                            onMouseDown={(e) => handleResizeStart(e, 'top-left')}
+                            style={{
+                                position: 'absolute',
+                                top: -8,
+                                left: -8,
+                                width: 16,
+                                height: 16,
+                                background: 'var(--accent)',
+                                borderRadius: '50%',
+                                cursor: 'nw-resize',
+                                zIndex: 11,
+                                opacity: isResizing && resizeEdge === 'top-left' ? 1 : 0.7,
+                            }}
+                        />
+                        <div 
+                            onMouseDown={(e) => handleResizeStart(e, 'top-right')}
+                            style={{
+                                position: 'absolute',
+                                top: -8,
+                                right: -8,
+                                width: 16,
+                                height: 16,
+                                background: 'var(--accent)',
+                                borderRadius: '50%',
+                                cursor: 'ne-resize',
+                                zIndex: 11,
+                                opacity: isResizing && resizeEdge === 'top-right' ? 1 : 0.7,
+                            }}
+                        />
+                        <div 
+                            onMouseDown={(e) => handleResizeStart(e, 'bottom-left')}
+                            style={{
+                                position: 'absolute',
+                                bottom: -8,
+                                left: -8,
+                                width: 16,
+                                height: 16,
+                                background: 'var(--accent)',
+                                borderRadius: '50%',
+                                cursor: 'sw-resize',
+                                zIndex: 11,
+                                opacity: isResizing && resizeEdge === 'bottom-left' ? 1 : 0.7,
+                            }}
+                        />
+                        <div 
+                            onMouseDown={(e) => handleResizeStart(e, 'bottom-right')}
+                            style={{
+                                position: 'absolute',
+                                bottom: -8,
+                                right: -8,
+                                width: 16,
+                                height: 16,
+                                background: 'var(--accent)',
+                                borderRadius: '50%',
+                                cursor: 'se-resize',
+                                zIndex: 11,
+                                opacity: isResizing && resizeEdge === 'bottom-right' ? 1 : 0.7,
+                            }}
+                        />
                     </div>
 
                     <div style={{
@@ -498,18 +624,18 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                     }}>
                         <p style={{
                             fontSize: 12,
-                            color: 'var(--pro-text-dim)',
+                            color: 'var(--text-secondary)',
                         }}>
-                            💡 拖拽图片调整位置，或选择上方预设
+                            💡 拖拽图片调整位置，拖拽边缘调整画布大小
                         </p>
                         <button
                             onClick={clearImage}
                             style={{
                                 padding: '8px 16px',
                                 background: 'transparent',
-                                border: '1px solid var(--pro-border)',
+                                border: '1px solid var(--border)',
                                 borderRadius: 6,
-                                color: 'var(--pro-text-dim)',
+                                color: 'var(--text-secondary)',
                                 fontSize: 12,
                                 cursor: 'pointer',
                                 transition: 'all 0.2s ease',
@@ -519,8 +645,8 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                                 e.currentTarget.style.color = '#ef4444';
                             }}
                             onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = 'var(--pro-border)';
-                                e.currentTarget.style.color = 'var(--pro-text-dim)';
+                                e.currentTarget.style.borderColor = 'var(--border)';
+                                e.currentTarget.style.color = 'var(--text-secondary)';
                             }}
                         >
                             ✕ 清除图片

@@ -84,7 +84,11 @@ export default function Home() {
             return;
         }
 
-        if (!prompt.trim()) {
+        const finalPrompt = activeMode === 'outpaint' 
+            ? (prompt.trim() || 'Extend the image naturally, maintain consistent style and lighting, seamless blending with the original content')
+            : prompt.trim();
+
+        if (activeMode !== 'outpaint' && !finalPrompt) {
             setError('请输入提示词');
             return;
         }
@@ -104,7 +108,7 @@ export default function Home() {
         try {
             const body: any = {
                 model: selectedModel,
-                prompt: prompt.trim(),
+                prompt: finalPrompt,
             };
 
             if (selectedRatio) body.aspectRatio = selectedRatio;
@@ -440,7 +444,7 @@ export default function Home() {
                                 </div>
                                 <div className="prompt-box">
                                     <textarea
-                                        placeholder="描述你想要的画面..."
+                                        placeholder={activeMode === 'outpaint' ? "可选：描述扩展后的画面细节（留空将自动扩展）" : "描述你想要的画面..."}
                                         value={prompt}
                                         onChange={(e) => setPrompt(e.target.value)}
                                         rows={3}
@@ -509,7 +513,7 @@ export default function Home() {
                                 </div>
                             </div>
 
-                            {selectedModel === 'gemini-3-pro-image-preview' && (
+                            {selectedModel === 'gemini-3-pro-image-preview' && activeMode !== 'outpaint' && (
                                 <div className="control-section">
                                     <label className="control-label">分辨率</label>
                                     <div className="resolution-options">
@@ -528,7 +532,7 @@ export default function Home() {
 
                             <button
                                 className="generate-button"
-                                disabled={isGenerating || !prompt.trim()}
+                                disabled={isGenerating || (activeMode !== 'outpaint' && !prompt.trim())}
                                 onClick={handleGenerate}
                             >
                                 {isGenerating ? (
