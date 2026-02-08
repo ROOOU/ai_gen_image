@@ -23,6 +23,8 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const loadHistory = async () => {
         if (!apiKey) { setError('Set API Key to view history'); return; }
@@ -37,6 +39,46 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
     };
 
     useEffect(() => { if (isOpen) loadHistory(); }, [isOpen, apiKey]);
+
+    const handleDelete = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (!confirm('确定要删除这条记录吗？')) return;
+        
+        setDeletingId(id);
+        try {
+            const res = await fetch(`/api/history?id=${id}`, {
+                method: 'DELETE',
+                headers: { 'x-api-key': apiKey },
+            });
+            const data = await res.json();
+            if (data.success) {
+                setHistory(prev => prev.filter(item => item.id !== id));
+                if (selectedItem?.id === id) {
+                    setSelectedItem(null);
+                }
+            } else {
+                alert(data.error || '删除失败');
+            }
+        } catch {
+            alert('删除失败');
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    const handleApply = (item: HistoryItem) => {
+        onSelectItem(item);
+        onClose();
+    };
+
+    const getModeLabel = (mode: string) => {
+        switch (mode) {
+            case 'text2img': return '文生图';
+            case 'img2img': return '图生图';
+            case 'outpaint': return '扩图';
+            default: return mode;
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -67,15 +109,59 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
 
                     <div className="history-list-grid">
                         {history.map(item => (
-                            <div key={item.id} className="history-thumb-card" onClick={() => { onSelectItem(item); onClose(); }}>
+                            <div key={item.id} className="history-thumb-card" onClick={() => setSelectedItem(item)}>
                                 <img src={item.thumbnailUrl || item.imageUrl} alt={item.prompt} loading="lazy" />
                                 <div className="history-thumb-overlay">
                                     <p className="history-thumb-prompt">{item.prompt}</p>
                                 </div>
+                                <button 
+                                    className="history-delete-btn"
+                                    onClick={(e) => handleDelete(e, item.id)}
+                                    disabled={deletingId === item.id}
+                                    title="删除"
+                                >
+                                    {deletingId === item.id ? '...' : '🗑️'}
+                                </button>
                             </div>
                         ))}
                     </div>
                 </div>
+
+                {/* Image Preview Modal */}
+                {selectedItem && (
+                    <div className="history-modal-overlay" onClick={() => setSelectedItem(null)}>
+                        <div className="history-modal" onClick={e => e.stopPropagation()}>
+                            <button className="modal-close" onClick={() => setSelectedItem(null)}>✕</button>
+                            
+                            <div className="modal-image-container">
+                                <img src={selectedItem.imageUrl} alt={selectedItem.prompt} />
+                            </div>
+                            
+                            <div className="modal-info">
+                                <div className="modal-meta">
+                                    <span className="modal-mode">{getModeLabel(selectedItem.mode)}</span>
+                                    <span className="modal-time">
+                                        {new Date(selectedItem.timestamp).toLocaleString('zh-CN')}
+                                    </span>
+                                </div>
+                                
+                                <div className="modal-prompt-section">
+                                    <label>提示词</label>
+                                    <p className="modal-prompt">{selectedItem.prompt}</p>
+                                </div>
+                                
+                                <div className="modal-actions">
+                                    <button className="modal-btn primary" onClick={() => handleApply(selectedItem)}>
+                                        应用此图片
+                                    </button>
+                                    <button className="modal-btn secondary" onClick={() => setSelectedItem(null)}>
+                                        关闭
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <style jsx>{`
@@ -147,6 +233,181 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                     -webkit-line-clamp: 2;
                     -webkit-box-orient: vertical;
                     overflow: hidden;
+                }
+                .history-delete-btn {
+                    position: absolute;
+                    top: 6px;
+                    right: 6px;
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 50%;
+                    background: rgba(0,0,0,0.6);
+                    border: none;
+                    cursor: pointer;
+                    opacity: 0;
+                    transition: opacity 0.2s, background 0.2s;
+                    font-size: 12px;
+                    z-index: 5;
+                }
+                .history-thumb-card:hover .history-delete-btn {
+                    opacity: 1;
+                }
+                .history-delete-btn:hover {
+                    background: rgba(239, 68, 68, 0.9);
+                }
+                
+                /* Modal Styles */
+                .history-modal-overlay {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(0,0,0,0.85);
+                    backdrop-filter: blur(8px);
+                    z-index: 2100;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                    animation: fadeIn 0.2s ease;
+                }
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                .history-modal {
+                    background: var(--bg-secondary);
+                    border-radius: 16px;
+                    max-width: 800px;
+                    max-height: 90vh;
+                    width: 100%;
+                    overflow: hidden;
+                    display: flex;
+                    flex-direction: column;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                    animation: modalSlideIn 0.3s ease;
+                }
+                @keyframes modalSlideIn {
+                    from { 
+                        opacity: 0;
+                        transform: scale(0.95) translateY(20px);
+                    }
+                    to { 
+                        opacity: 1;
+                        transform: scale(1) translateY(0);
+                    }
+                }
+                .modal-close {
+                    position: absolute;
+                    top: 16px;
+                    right: 16px;
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 50%;
+                    background: rgba(0,0,0,0.6);
+                    border: none;
+                    color: white;
+                    font-size: 16px;
+                    cursor: pointer;
+                    z-index: 10;
+                    transition: background 0.2s;
+                }
+                .modal-close:hover {
+                    background: rgba(0,0,0,0.8);
+                }
+                .modal-image-container {
+                    flex: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: #0a0a0a;
+                    padding: 20px;
+                    max-height: 60vh;
+                }
+                .modal-image-container img {
+                    max-width: 100%;
+                    max-height: 50vh;
+                    object-fit: contain;
+                    border-radius: 8px;
+                }
+                .modal-info {
+                    padding: 20px;
+                    border-top: 1px solid var(--border-color);
+                }
+                .modal-meta {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    margin-bottom: 12px;
+                }
+                .modal-mode {
+                    padding: 4px 10px;
+                    background: var(--accent);
+                    color: #000;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                .modal-time {
+                    font-size: 12px;
+                    color: var(--text-muted);
+                }
+                .modal-prompt-section {
+                    margin-bottom: 16px;
+                }
+                .modal-prompt-section label {
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    margin-bottom: 6px;
+                    display: block;
+                }
+                .modal-prompt {
+                    font-size: 14px;
+                    color: var(--text-primary);
+                    line-height: 1.5;
+                    padding: 12px;
+                    background: var(--bg-tertiary);
+                    border-radius: 8px;
+                    max-height: 120px;
+                    overflow-y: auto;
+                }
+                .modal-actions {
+                    display: flex;
+                    gap: 12px;
+                }
+                .modal-btn {
+                    flex: 1;
+                    padding: 12px 20px;
+                    border-radius: 10px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    border: none;
+                }
+                .modal-btn.primary {
+                    background: var(--accent);
+                    color: #000;
+                }
+                .modal-btn.primary:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 12px rgba(255,200,0,0.3);
+                }
+                .modal-btn.secondary {
+                    background: var(--bg-tertiary);
+                    color: var(--text-primary);
+                    border: 1px solid var(--border-color);
+                }
+                .modal-btn.secondary:hover {
+                    background: var(--bg-hover);
+                }
+                
+                @media (max-width: 600px) {
+                    .history-modal {
+                        max-height: 100vh;
+                        border-radius: 0;
+                    }
+                    .modal-actions {
+                        flex-direction: column;
+                    }
                 }
             `}</style>
         </div>

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import OutpaintEditor from '@/components/OutpaintEditor';
 import ImageToImageUploader from '@/components/ImageToImageUploader';
+import HistoryPanel from '@/components/HistoryPanel';
 
 const MODELS = [
     { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: '快速高效' },
@@ -183,6 +184,12 @@ export default function Home() {
         }
     };
 
+    const handleHistorySelect = (item: HistoryItem) => {
+        setResultImage(item.imageUrl);
+        setPrompt(item.prompt);
+        setActiveTab('generate');
+    };
+
     const groupedHistory = history.reduce((groups: any, item) => {
         const date = new Date(item.timestamp).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
         const today = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
@@ -222,7 +229,12 @@ export default function Home() {
     return (
         <div className="app-container">
             <header className="app-header">
-                <div className="header-logo">
+                <div 
+                    className="header-logo" 
+                    onClick={() => setActiveTab('generate')}
+                    style={{ cursor: 'pointer' }}
+                    title="返回首页"
+                >
                     <span className="logo-icon">🍌</span>
                     <span className="logo-text">Nano Banana</span>
                 </div>
@@ -269,7 +281,6 @@ export default function Home() {
             <main className="app-main">
                 {activeTab === 'generate' && (
                     <div className="generate-layout">
-                        {/* Mobile Preview Area - Only shows when generating or has result */}
                         <div className={`mobile-preview ${isGenerating || resultImage ? 'active' : ''}`}>
                             {isGenerating ? (
                                 <div className="generating-view">
@@ -318,7 +329,6 @@ export default function Home() {
                         </div>
 
                         <div className="controls-panel">
-                            {/* Desktop Preview - Only shows on desktop */}
                             <div className="desktop-preview">
                                 {isGenerating ? (
                                     <div className="generating-view">
@@ -401,7 +411,6 @@ export default function Home() {
                                 </div>
                             </div>
 
-                            {/* Welcome Tip Card - Mobile Only */}
                             {!resultImage && !isGenerating && showWelcomeTip && (
                                 <div className="welcome-tip-card">
                                     <button className="tip-close" onClick={dismissWelcomeTip}>✕</button>
@@ -645,6 +654,13 @@ export default function Home() {
                     </div>
                 )}
             </main>
+
+            <HistoryPanel 
+                isOpen={activeTab === 'history'}
+                onClose={() => setActiveTab('generate')}
+                onSelectItem={handleHistorySelect}
+                apiKey={apiKey}
+            />
         </div>
     );
 }
