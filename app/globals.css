@@ -44,11 +44,11 @@ html, body {
 
 /* Header */
 .app-header {
-  height: 60px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -57,15 +57,15 @@ html, body {
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .logo-icon {
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .logo-text {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   background: linear-gradient(135deg, var(--accent), #fff);
   -webkit-background-clip: text;
@@ -75,11 +75,11 @@ html, body {
 
 .header-nav {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .nav-tab {
-  padding: 8px 20px;
+  padding: 8px 16px;
   background: transparent;
   border: none;
   border-radius: var(--radius-md);
@@ -104,15 +104,15 @@ html, body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .api-status {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  padding: 6px 12px;
+  font-size: 12px;
+  padding: 6px 10px;
   border-radius: var(--radius-md);
   background: transparent;
   border: none;
@@ -128,14 +128,14 @@ html, body {
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
 }
 
 .settings-btn {
-  padding: 8px 16px;
+  padding: 6px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -160,8 +160,25 @@ html, body {
 /* Generate Layout */
 .generate-layout {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 380px 1fr;
   height: 100%;
+}
+
+/* Mobile Preview - Hidden by default on desktop */
+.mobile-preview {
+  display: none;
+}
+
+/* Desktop Preview */
+.desktop-preview {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
 }
 
 /* Controls Panel */
@@ -208,6 +225,67 @@ html, body {
   background: var(--accent-dim);
 }
 
+/* Welcome Tip Card - Mobile Style */
+.welcome-tip-card {
+  position: relative;
+  background: linear-gradient(135deg, var(--accent-dim), rgba(51, 197, 255, 0.05));
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 8px;
+}
+
+.tip-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: var(--transition);
+}
+
+.tip-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.tip-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.tip-emoji {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.tip-text {
+  flex: 1;
+}
+
+.tip-text strong {
+  display: block;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.tip-text p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
 /* Mode Tabs */
 .mode-tabs {
   display: grid;
@@ -219,8 +297,8 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 8px;
+  gap: 4px;
+  padding: 12px 8px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -242,12 +320,6 @@ html, body {
 
 .tab-icon {
   font-size: 20px;
-}
-
-.tab-info {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 .tab-title {
@@ -278,6 +350,7 @@ html, body {
   resize: none;
   outline: none;
   font-family: inherit;
+  line-height: 1.5;
 }
 
 .prompt-box textarea::placeholder {
@@ -477,25 +550,17 @@ html, body {
   font-size: 13px;
 }
 
-/* Preview Panel */
-.preview-panel {
-  background: var(--bg-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
 /* Generating View */
 .generating-view {
   text-align: center;
+  padding: 40px;
 }
 
 .progress-circle {
   position: relative;
-  width: 120px;
-  height: 120px;
-  margin: 0 auto 20px;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto 16px;
 }
 
 .progress-circle svg {
@@ -523,7 +588,7 @@ html, body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -546,7 +611,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 20px;
   overflow: auto;
 }
 
@@ -561,7 +626,7 @@ html, body {
 .result-toolbar {
   display: flex;
   gap: 12px;
-  padding: 20px 24px;
+  padding: 16px 20px;
   background: var(--bg-primary);
   border-top: 1px solid var(--border);
 }
@@ -600,9 +665,9 @@ html, body {
 }
 
 .empty-illustration {
-  width: 100px;
-  height: 100px;
-  margin: 0 auto 24px;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -611,7 +676,7 @@ html, body {
 }
 
 .empty-emoji {
-  font-size: 48px;
+  font-size: 40px;
 }
 
 .empty-view h3 {
@@ -624,12 +689,13 @@ html, body {
 .empty-view p {
   font-size: 14px;
   color: var(--text-secondary);
-  max-width: 280px;
+  max-width: 260px;
+  margin: 0 auto;
 }
 
 /* History View */
 .history-view {
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
   height: 100%;
 }
@@ -637,26 +703,26 @@ html, body {
 .view-title {
   font-size: 20px;
   font-weight: 700;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   color: var(--text-primary);
 }
 
 .history-group {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .history-date {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .history-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
 }
 
@@ -748,7 +814,7 @@ html, body {
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 24px;
+  padding: 20px;
 }
 
 .settings-card {
@@ -854,31 +920,61 @@ html, body {
   background: var(--border-hover);
 }
 
-/* Responsive */
+/* ==================== MOBILE RESPONSIVE ==================== */
 @media (max-width: 900px) {
   .generate-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
   }
   
+  /* Mobile Preview - Shows at top when active */
+  .mobile-preview {
+    display: block;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    max-height: 45vh;
+    min-height: 200px;
+    overflow: hidden;
+  }
+  
+  .mobile-preview:not(.active) {
+    display: none;
+  }
+  
+  .mobile-preview .generating-view,
+  .mobile-preview .result-view {
+    height: 100%;
+    max-height: 45vh;
+  }
+  
+  .mobile-preview .result-image-container {
+    padding: 16px;
+  }
+  
+  .mobile-preview .result-toolbar {
+    padding: 12px 16px;
+  }
+  
+  /* Desktop Preview - Hidden on mobile */
+  .desktop-preview {
+    display: none;
+  }
+  
   .controls-panel {
     border-right: none;
-    border-bottom: 1px solid var(--border);
-    max-height: 50vh;
+    padding: 16px;
   }
   
-  .mode-tabs {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  
-  .history-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  /* Welcome tip always visible on mobile until dismissed */
+  .welcome-tip-card {
+    display: block;
   }
 }
 
 @media (max-width: 600px) {
   .app-header {
-    padding: 0 16px;
+    padding: 0 12px;
+    height: 52px;
   }
   
   .logo-text {
@@ -886,7 +982,7 @@ html, body {
   }
   
   .nav-tab {
-    padding: 8px 14px;
+    padding: 6px 12px;
     font-size: 13px;
   }
   
@@ -894,12 +990,21 @@ html, body {
     display: none;
   }
   
+  .settings-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
   .ratio-options {
     grid-template-columns: repeat(3, 1fr);
   }
   
   .mode-tab {
-    padding: 12px 6px;
+    padding: 10px 4px;
+  }
+  
+  .tab-icon {
+    font-size: 18px;
   }
   
   .tab-title {
@@ -912,13 +1017,48 @@ html, body {
   
   .result-toolbar {
     flex-wrap: wrap;
-    padding: 16px;
+    gap: 8px;
+    padding: 12px;
   }
   
   .toolbar-btn {
     flex: 1;
-    min-width: 80px;
-    padding: 10px 12px;
+    min-width: 70px;
+    padding: 10px 8px;
     font-size: 13px;
+  }
+  
+  .history-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
+  .settings-card {
+    padding: 24px 20px;
+  }
+  
+  .progress-circle {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .progress-value {
+    font-size: 18px;
+  }
+  
+  .welcome-tip-card {
+    padding: 14px;
+  }
+  
+  .tip-emoji {
+    font-size: 20px;
+  }
+  
+  .tip-text strong {
+    font-size: 13px;
+  }
+  
+  .tip-text p {
+    font-size: 12px;
   }
 }

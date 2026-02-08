@@ -49,12 +49,21 @@ export default function Home() {
     const [referenceImage, setReferenceImage] = useState<{ data: string; mimeType: string } | null>(null);
     const [generationProgress, setGenerationProgress] = useState(0);
     const [showInspiration, setShowInspiration] = useState(false);
+    const [showWelcomeTip, setShowWelcomeTip] = useState(true);
 
     useEffect(() => {
         const savedKey = localStorage.getItem('gemini_api_key');
         if (savedKey) setApiKey(savedKey);
         loadHistory();
+        
+        const hasSeenTip = localStorage.getItem('has_seen_welcome_tip');
+        if (hasSeenTip) setShowWelcomeTip(false);
     }, []);
+
+    const dismissWelcomeTip = () => {
+        setShowWelcomeTip(false);
+        localStorage.setItem('has_seen_welcome_tip', 'true');
+    };
 
     const loadHistory = async () => {
         const key = localStorage.getItem('gemini_api_key');
@@ -83,6 +92,7 @@ export default function Home() {
         setIsGenerating(true);
         setError(null);
         setGenerationProgress(0);
+        setShowWelcomeTip(false);
 
         const progressInterval = setInterval(() => {
             setGenerationProgress(prev => {
@@ -187,6 +197,15 @@ export default function Home() {
         }
     };
 
+    const getModeDescription = () => {
+        switch (activeMode) {
+            case 'text2img': return '输入提示词，AI 将为你生成独特图片';
+            case 'img2img': return '上传参考图，AI 将在此基础上创作';
+            case 'outpaint': return '上传图片并扩展边界，创造更大画面';
+            default: return '';
+        }
+    };
+
     const inspirationPrompts = [
         { title: '赛博朋克城市', prompt: 'Cyberpunk city at night, neon lights, rain, futuristic', emoji: '🌃' },
         { title: '梦幻森林', prompt: 'Enchanted forest with glowing mushrooms, fairy lights, magical atmosphere', emoji: '🌲' },
@@ -246,7 +265,111 @@ export default function Home() {
             <main className="app-main">
                 {activeTab === 'generate' && (
                     <div className="generate-layout">
+                        {/* Mobile Preview Area - Only shows when generating or has result */}
+                        <div className={`mobile-preview ${isGenerating || resultImage ? 'active' : ''}`}>
+                            {isGenerating ? (
+                                <div className="generating-view">
+                                    <div className="progress-circle">
+                                        <svg viewBox="0 0 100 100">
+                                            <circle className="circle-bg" cx="50" cy="50" r="45" />
+                                            <circle 
+                                                className="circle-progress" 
+                                                cx="50" 
+                                                cy="50" 
+                                                r="45"
+                                                style={{
+                                                    strokeDasharray: `${2 * Math.PI * 45}`,
+                                                    strokeDashoffset: `${2 * Math.PI * 45 * (1 - generationProgress / 100)}`,
+                                                }}
+                                            />
+                                        </svg>
+                                        <span className="progress-value">{Math.round(generationProgress)}%</span>
+                                    </div>
+                                    <p>正在创作中...</p>
+                                </div>
+                            ) : resultImage ? (
+                                <div className="result-view">
+                                    <div className="result-image-container">
+                                        <img src={resultImage} alt="Generated" />
+                                    </div>
+                                    <div className="result-toolbar">
+                                        <button className="toolbar-btn primary" onClick={handleDownload}>
+                                            下载
+                                        </button>
+                                        <button className="toolbar-btn" onClick={handleCopy}>
+                                            复制
+                                        </button>
+                                        <button 
+                                            className="toolbar-btn"
+                                            onClick={() => {
+                                                setReferenceImage({ data: resultImage, mimeType: 'image/png' });
+                                                setActiveMode('img2img');
+                                            }}
+                                        >
+                                            参考
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+
                         <div className="controls-panel">
+                            {/* Desktop Preview - Only shows on desktop */}
+                            <div className="desktop-preview">
+                                {isGenerating ? (
+                                    <div className="generating-view">
+                                        <div className="progress-circle">
+                                            <svg viewBox="0 0 100 100">
+                                                <circle className="circle-bg" cx="50" cy="50" r="45" />
+                                                <circle 
+                                                    className="circle-progress" 
+                                                    cx="50" 
+                                                    cy="50" 
+                                                    r="45"
+                                                    style={{
+                                                        strokeDasharray: `${2 * Math.PI * 45}`,
+                                                        strokeDashoffset: `${2 * Math.PI * 45 * (1 - generationProgress / 100)}`,
+                                                    }}
+                                                />
+                                            </svg>
+                                            <span className="progress-value">{Math.round(generationProgress)}%</span>
+                                        </div>
+                                        <p>正在创作中...</p>
+                                    </div>
+                                ) : resultImage ? (
+                                    <div className="result-view">
+                                        <div className="result-image-container">
+                                            <img src={resultImage} alt="Generated" />
+                                        </div>
+                                        <div className="result-toolbar">
+                                            <button className="toolbar-btn primary" onClick={handleDownload}>
+                                                下载
+                                            </button>
+                                            <button className="toolbar-btn" onClick={handleCopy}>
+                                                复制
+                                            </button>
+                                            <button 
+                                                className="toolbar-btn"
+                                                onClick={() => {
+                                                    setReferenceImage({ data: resultImage, mimeType: 'image/png' });
+                                                    setActiveMode('img2img');
+                                                }}
+                                            >
+                                                参考创作
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="empty-view">
+                                        <div className="empty-illustration">
+                                            <span className="empty-emoji">🎨</span>
+                                        </div>
+                                        <h3>开始你的创作</h3>
+                                        <p>{getModeDescription()}</p>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="control-section">
                                 <label className="control-label">创作模式</label>
                                 <div className="mode-tabs">
@@ -255,30 +378,38 @@ export default function Home() {
                                         onClick={() => setActiveMode('text2img')}
                                     >
                                         <span className="tab-icon">📝</span>
-                                        <div className="tab-info">
-                                            <span className="tab-title">文生图</span>
-                                        </div>
+                                        <span className="tab-title">文生图</span>
                                     </button>
                                     <button
                                         className={`mode-tab ${activeMode === 'img2img' ? 'active' : ''}`}
                                         onClick={() => setActiveMode('img2img')}
                                     >
                                         <span className="tab-icon">🎨</span>
-                                        <div className="tab-info">
-                                            <span className="tab-title">图生图</span>
-                                        </div>
+                                        <span className="tab-title">图生图</span>
                                     </button>
                                     <button
                                         className={`mode-tab ${activeMode === 'outpaint' ? 'active' : ''}`}
                                         onClick={() => setActiveMode('outpaint')}
                                     >
                                         <span className="tab-icon">🔍</span>
-                                        <div className="tab-info">
-                                            <span className="tab-title">扩图</span>
-                                        </div>
+                                        <span className="tab-title">扩图</span>
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Welcome Tip Card - Mobile Only */}
+                            {!resultImage && !isGenerating && showWelcomeTip && (
+                                <div className="welcome-tip-card">
+                                    <button className="tip-close" onClick={dismissWelcomeTip}>✕</button>
+                                    <div className="tip-content">
+                                        <span className="tip-emoji">💡</span>
+                                        <div className="tip-text">
+                                            <strong>提示</strong>
+                                            <p>{getModeDescription()}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {activeMode === 'img2img' && (
                                 <div className="control-section">
@@ -413,65 +544,6 @@ export default function Home() {
                             {error && (
                                 <div className="error-alert">
                                     {error}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="preview-panel">
-                            {isGenerating ? (
-                                <div className="generating-view">
-                                    <div className="progress-circle">
-                                        <svg viewBox="0 0 100 100">
-                                            <circle className="circle-bg" cx="50" cy="50" r="45" />
-                                            <circle 
-                                                className="circle-progress" 
-                                                cx="50" 
-                                                cy="50" 
-                                                r="45"
-                                                style={{
-                                                    strokeDasharray: `${2 * Math.PI * 45}`,
-                                                    strokeDashoffset: `${2 * Math.PI * 45 * (1 - generationProgress / 100)}`,
-                                                }}
-                                            />
-                                        </svg>
-                                        <span className="progress-value">{Math.round(generationProgress)}%</span>
-                                    </div>
-                                    <p>正在创作中...</p>
-                                </div>
-                            ) : resultImage ? (
-                                <div className="result-view">
-                                    <div className="result-image-container">
-                                        <img src={resultImage} alt="Generated" />
-                                    </div>
-                                    <div className="result-toolbar">
-                                        <button className="toolbar-btn primary" onClick={handleDownload}>
-                                            下载
-                                        </button>
-                                        <button className="toolbar-btn" onClick={handleCopy}>
-                                            复制
-                                        </button>
-                                        <button 
-                                            className="toolbar-btn"
-                                            onClick={() => {
-                                                setReferenceImage({ data: resultImage, mimeType: 'image/png' });
-                                                setActiveMode('img2img');
-                                            }}
-                                        >
-                                            参考创作
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="empty-view">
-                                    <div className="empty-illustration">
-                                        <span className="empty-emoji">🎨</span>
-                                    </div>
-                                    <h3>开始你的创作</h3>
-                                    <p>
-                                        {activeMode === 'text2img' && '输入提示词，AI 将为你生成独特图片'}
-                                        {activeMode === 'img2img' && '上传参考图，AI 将在此基础上创作'}
-                                        {activeMode === 'outpaint' && '上传图片并扩展边界，创造更大画面'}
-                                    </p>
                                 </div>
                             )}
                         </div>
