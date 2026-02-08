@@ -5,8 +5,8 @@ import OutpaintEditor from '@/components/OutpaintEditor';
 import ImageToImageUploader from '@/components/ImageToImageUploader';
 
 const MODELS = [
-    { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: '快速高效，适合日常创作' },
-    { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: '专业级质量，支持高分辨率' },
+    { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: '快速高效' },
+    { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: '专业品质' },
 ];
 
 const ASPECT_RATIOS = [
@@ -18,9 +18,9 @@ const ASPECT_RATIOS = [
 ];
 
 const RESOLUTIONS = [
-    { id: '1K', name: '1K', width: 1024 },
-    { id: '2K', name: '2K', width: 2048 },
-    { id: '4K', name: '4K', width: 4096 },
+    { id: '1K', name: '1K' },
+    { id: '2K', name: '2K' },
+    { id: '4K', name: '4K' },
 ];
 
 interface HistoryItem {
@@ -34,10 +34,9 @@ interface HistoryItem {
 }
 
 export default function Home() {
-    const [activeView, setActiveView] = useState<'inspiration' | 'generate' | 'assets' | 'canvas' | 'api'>('generate');
+    const [activeTab, setActiveTab] = useState<'generate' | 'history' | 'settings'>('generate');
     const [apiKey, setApiKey] = useState('');
     const [prompt, setPrompt] = useState('');
-    const [negativePrompt, setNegativePrompt] = useState('');
     const [selectedModel, setSelectedModel] = useState(MODELS[1].id);
     const [selectedRatio, setSelectedRatio] = useState('1:1');
     const [selectedResolution, setSelectedResolution] = useState('2K');
@@ -48,8 +47,8 @@ export default function Home() {
     const [activeMode, setActiveMode] = useState<'text2img' | 'img2img' | 'outpaint'>('text2img');
     const [outpaintData, setOutpaintData] = useState<any>(null);
     const [referenceImage, setReferenceImage] = useState<{ data: string; mimeType: string } | null>(null);
-    const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
     const [generationProgress, setGenerationProgress] = useState(0);
+    const [showInspiration, setShowInspiration] = useState(false);
 
     useEffect(() => {
         const savedKey = localStorage.getItem('gemini_api_key');
@@ -72,7 +71,7 @@ export default function Home() {
     const handleGenerate = async () => {
         if (!apiKey) {
             setError('请先配置 API Key');
-            setActiveView('api');
+            setActiveTab('settings');
             return;
         }
 
@@ -188,421 +187,387 @@ export default function Home() {
         }
     };
 
+    const inspirationPrompts = [
+        { title: '赛博朋克城市', prompt: 'Cyberpunk city at night, neon lights, rain, futuristic', emoji: '🌃' },
+        { title: '梦幻森林', prompt: 'Enchanted forest with glowing mushrooms, fairy lights, magical atmosphere', emoji: '🌲' },
+        { title: '未来科技', prompt: 'Futuristic technology interface, holographic displays, sleek design', emoji: '🚀' },
+        { title: '古风山水', prompt: 'Traditional Chinese landscape painting, mountains, mist, ink wash style', emoji: '🏔️' },
+        { title: '可爱动物', prompt: 'Cute fluffy kitten playing with yarn, soft lighting, cozy home', emoji: '🐱' },
+        { title: '美食摄影', prompt: 'Gourmet food photography, delicious pasta, professional lighting', emoji: '🍝' },
+    ];
+
     return (
-        <div className="pro-layout pro-theme">
-            <aside className="pro-sidebar">
-                <div className="pro-sidebar-logo">🍌</div>
-                <nav className="pro-nav-list">
-                    <button
-                        className={`pro-nav-item ${activeView === 'inspiration' ? 'active' : ''}`}
-                        onClick={() => setActiveView('inspiration')}
+        <div className="app-container">
+            <header className="app-header">
+                <div className="header-logo">
+                    <span className="logo-icon">🍌</span>
+                    <span className="logo-text">Nano Banana</span>
+                </div>
+                
+                <nav className="header-nav">
+                    <button 
+                        className={`nav-tab ${activeTab === 'generate' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('generate')}
                     >
-                        <span className="nav-icon">💡</span>
-                        <span className="nav-label-small">灵感</span>
+                        创作
                     </button>
-                    <button
-                        className={`pro-nav-item ${activeView === 'generate' ? 'active' : ''}`}
-                        onClick={() => setActiveView('generate')}
+                    <button 
+                        className={`nav-tab ${activeTab === 'history' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('history')}
                     >
-                        <span className="nav-icon">✨</span>
-                        <span className="nav-label-small">生成</span>
-                    </button>
-                    <button
-                        className={`pro-nav-item ${activeView === 'assets' ? 'active' : ''}`}
-                        onClick={() => setActiveView('assets')}
-                    >
-                        <span className="nav-icon">📁</span>
-                        <span className="nav-label-small">资产</span>
+                        历史 ({history.length})
                     </button>
                 </nav>
-                <div className="pro-sidebar-bottom">
-                    <button
-                        className={`pro-nav-item ${activeView === 'api' ? 'active' : ''}`}
-                        onClick={() => setActiveView('api')}
-                        title="API 设置"
+
+                <div className="header-actions">
+                    {apiKey ? (
+                        <span className="api-status connected">
+                            <span className="status-dot"></span>
+                            已连接
+                        </span>
+                    ) : (
+                        <button 
+                            className="api-status disconnected"
+                            onClick={() => setActiveTab('settings')}
+                        >
+                            <span className="status-dot"></span>
+                            未配置 API
+                        </button>
+                    )}
+                    <button 
+                        className={`settings-btn ${activeTab === 'settings' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('settings')}
                     >
-                        <span className="nav-icon">⚙️</span>
+                        设置
                     </button>
                 </div>
-            </aside>
+            </header>
 
-            <main className="pro-stage">
-                <header className="pro-top-nav">
-                    {['图片', '视频', '无限画布'].map((cat) => (
-                        <button
-                            key={cat}
-                            className={`top-cat-item ${cat === '图片' ? 'active' : ''}`}
-                        >
-                            {cat}
-                        </button>
-                    ))}
-                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 16 }}>
-                        {apiKey ? (
-                            <span style={{ fontSize: 12, color: 'var(--pro-accent)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--pro-accent)' }}></span>
-                                API 已连接
-                            </span>
-                        ) : (
-                            <button
-                                className="top-cat-item"
-                                onClick={() => setActiveView('api')}
-                                style={{ color: '#ef4444' }}
-                            >
-                                未设置 API Key
-                            </button>
-                        )}
-                    </div>
-                </header>
-
-                <div className="pro-view-content">
-                    {activeView === 'generate' && (
-                        <div className="pro-workbench">
-                            <div className="workbench-controls">
-                                <div>
-                                    <p className="pro-section-title">创作模式</p>
-                                    <div className="mode-selector">
-                                        <button
-                                            className={`mode-btn ${activeMode === 'text2img' ? 'active' : ''}`}
-                                            onClick={() => setActiveMode('text2img')}
-                                        >
-                                            <span className="mode-icon">📝</span>
-                                            <span className="mode-label">文生图</span>
-                                            <span className="mode-desc">文本生成图片</span>
-                                        </button>
-                                        <button
-                                            className={`mode-btn ${activeMode === 'img2img' ? 'active' : ''}`}
-                                            onClick={() => setActiveMode('img2img')}
-                                        >
-                                            <span className="mode-icon">🎨</span>
-                                            <span className="mode-label">图生图</span>
-                                            <span className="mode-desc">基于参考图创作</span>
-                                        </button>
-                                        <button
-                                            className={`mode-btn ${activeMode === 'outpaint' ? 'active' : ''}`}
-                                            onClick={() => setActiveMode('outpaint')}
-                                        >
-                                            <span className="mode-icon">🔍</span>
-                                            <span className="mode-label">扩图</span>
-                                            <span className="mode-desc">扩展图片边界</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {activeMode === 'img2img' && (
-                                    <div>
-                                        <p className="pro-section-title">参考图片</p>
-                                        <ImageToImageUploader
-                                            onImageReady={setReferenceImage}
-                                            currentImage={referenceImage?.data}
-                                        />
-                                    </div>
-                                )}
-
-                                {activeMode === 'outpaint' && (
-                                    <div>
-                                        <p className="pro-section-title">扩图编辑</p>
-                                        <OutpaintEditor onCompositeReady={setOutpaintData} />
-                                    </div>
-                                )}
-
-                                <div>
-                                    <p className="pro-section-title">提示词</p>
-                                    <div className="prompt-input-wrapper">
-                                        <textarea
-                                            className="prompt-textarea"
-                                            placeholder="描述你想要的画面，例如：一只可爱的猫咪在草地上玩耍..."
-                                            value={prompt}
-                                            onChange={(e) => setPrompt(e.target.value)}
-                                            rows={4}
-                                        />
-                                        <div className="prompt-actions">
-                                            <button
-                                                className="prompt-action-btn"
-                                                onClick={() => setPrompt('')}
-                                                disabled={!prompt}
-                                            >
-                                                清空
-                                            </button>
-                                            <span className="prompt-count">{prompt.length} 字</span>
+            <main className="app-main">
+                {activeTab === 'generate' && (
+                    <div className="generate-layout">
+                        <div className="controls-panel">
+                            <div className="control-section">
+                                <label className="control-label">创作模式</label>
+                                <div className="mode-tabs">
+                                    <button
+                                        className={`mode-tab ${activeMode === 'text2img' ? 'active' : ''}`}
+                                        onClick={() => setActiveMode('text2img')}
+                                    >
+                                        <span className="tab-icon">📝</span>
+                                        <div className="tab-info">
+                                            <span className="tab-title">文生图</span>
                                         </div>
+                                    </button>
+                                    <button
+                                        className={`mode-tab ${activeMode === 'img2img' ? 'active' : ''}`}
+                                        onClick={() => setActiveMode('img2img')}
+                                    >
+                                        <span className="tab-icon">🎨</span>
+                                        <div className="tab-info">
+                                            <span className="tab-title">图生图</span>
+                                        </div>
+                                    </button>
+                                    <button
+                                        className={`mode-tab ${activeMode === 'outpaint' ? 'active' : ''}`}
+                                        onClick={() => setActiveMode('outpaint')}
+                                    >
+                                        <span className="tab-icon">🔍</span>
+                                        <div className="tab-info">
+                                            <span className="tab-title">扩图</span>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {activeMode === 'img2img' && (
+                                <div className="control-section">
+                                    <label className="control-label">参考图片</label>
+                                    <ImageToImageUploader
+                                        onImageReady={setReferenceImage}
+                                        currentImage={referenceImage?.data}
+                                    />
+                                </div>
+                            )}
+
+                            {activeMode === 'outpaint' && (
+                                <div className="control-section">
+                                    <label className="control-label">扩图编辑</label>
+                                    <OutpaintEditor onCompositeReady={setOutpaintData} />
+                                </div>
+                            )}
+
+                            <div className="control-section">
+                                <div className="label-row">
+                                    <label className="control-label">提示词</label>
+                                    <button 
+                                        className="inspiration-toggle"
+                                        onClick={() => setShowInspiration(!showInspiration)}
+                                    >
+                                        灵感
+                                    </button>
+                                </div>
+                                <div className="prompt-box">
+                                    <textarea
+                                        placeholder="描述你想要的画面..."
+                                        value={prompt}
+                                        onChange={(e) => setPrompt(e.target.value)}
+                                        rows={3}
+                                    />
+                                    <div className="prompt-footer">
+                                        <button 
+                                            className="clear-prompt"
+                                            onClick={() => setPrompt('')}
+                                            disabled={!prompt}
+                                        >
+                                            清空
+                                        </button>
+                                        <span className="char-count">{prompt.length}</span>
                                     </div>
                                 </div>
 
-                                <div>
-                                    <p className="pro-section-title">模型选择</p>
-                                    <div className="model-selector">
-                                        {MODELS.map((model) => (
-                                            <button
-                                                key={model.id}
-                                                className={`model-btn ${selectedModel === model.id ? 'active' : ''}`}
-                                                onClick={() => setSelectedModel(model.id)}
-                                            >
-                                                <span className="model-name">{model.name}</span>
-                                                <span className="model-desc">{model.description}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <p className="pro-section-title">图片比例</p>
-                                    <div className="ratio-grid">
-                                        {ASPECT_RATIOS.map((r) => (
-                                            <button
-                                                key={r.id}
-                                                className={`ratio-btn ${selectedRatio === r.id ? 'active' : ''}`}
-                                                onClick={() => setSelectedRatio(r.id)}
-                                            >
-                                                <span className="ratio-name">{r.name}</span>
-                                                <span className="ratio-label">{r.label}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {selectedModel === 'gemini-3-pro-image-preview' && (
-                                    <div>
-                                        <p className="pro-section-title">分辨率</p>
-                                        <div className="resolution-grid">
-                                            {RESOLUTIONS.map((res) => (
+                                {showInspiration && (
+                                    <div className="inspiration-panel">
+                                        <div className="inspiration-list">
+                                            {inspirationPrompts.map((item, idx) => (
                                                 <button
-                                                    key={res.id}
-                                                    className={`resolution-btn ${selectedResolution === res.id ? 'active' : ''}`}
-                                                    onClick={() => setSelectedResolution(res.id)}
+                                                    key={idx}
+                                                    className="inspiration-item"
+                                                    onClick={() => {
+                                                        setPrompt(item.prompt);
+                                                        setShowInspiration(false);
+                                                    }}
                                                 >
-                                                    {res.name}
+                                                    <span>{item.emoji}</span>
+                                                    <span>{item.title}</span>
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
                                 )}
-
-                                <button
-                                    className="generate-btn"
-                                    disabled={isGenerating || !prompt.trim()}
-                                    onClick={handleGenerate}
-                                >
-                                    {isGenerating ? (
-                                        <>
-                                            <span className="spinner"></span>
-                                            <span>生成中... {Math.round(generationProgress)}%</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span>✨</span>
-                                            <span>开始生成</span>
-                                        </>
-                                    )}
-                                </button>
-
-                                {error && (
-                                    <div className="error-message">
-                                        <span>⚠️</span>
-                                        <span>{error}</span>
-                                    </div>
-                                )}
                             </div>
 
-                            <div className="workbench-canvas">
-                                {isGenerating ? (
-                                    <div className="generating-state">
-                                        <div className="progress-ring">
-                                            <svg viewBox="0 0 100 100">
-                                                <circle
-                                                    className="progress-ring-bg"
-                                                    cx="50"
-                                                    cy="50"
-                                                    r="45"
-                                                />
-                                                <circle
-                                                    className="progress-ring-fill"
-                                                    cx="50"
-                                                    cy="50"
-                                                    r="45"
-                                                    style={{
-                                                        strokeDasharray: `${2 * Math.PI * 45}`,
-                                                        strokeDashoffset: `${2 * Math.PI * 45 * (1 - generationProgress / 100)}`,
-                                                    }}
-                                                />
-                                            </svg>
-                                            <div className="progress-text">{Math.round(generationProgress)}%</div>
-                                        </div>
-                                        <p className="generating-text">正在构思艺术品...</p>
-                                    </div>
-                                ) : resultImage ? (
-                                    <div className="result-container">
-                                        <div className="result-image-wrapper">
-                                            <img src={resultImage} alt="Generated" className="result-image" />
-                                        </div>
-                                        <div className="result-actions">
-                                            <button className="result-btn primary" onClick={handleDownload}>
-                                                <span>⬇️</span>
-                                                <span>下载</span>
-                                            </button>
-                                            <button className="result-btn" onClick={handleCopy}>
-                                                <span>📋</span>
-                                                <span>复制</span>
-                                            </button>
+                            <div className="control-section">
+                                <label className="control-label">模型</label>
+                                <div className="model-options">
+                                    {MODELS.map((model) => (
+                                        <button
+                                            key={model.id}
+                                            className={`model-option ${selectedModel === model.id ? 'active' : ''}`}
+                                            onClick={() => setSelectedModel(model.id)}
+                                        >
+                                            <span className="option-name">{model.name}</span>
+                                            <span className="option-desc">{model.description}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="control-section">
+                                <label className="control-label">图片比例</label>
+                                <div className="ratio-options">
+                                    {ASPECT_RATIOS.map((r) => (
+                                        <button
+                                            key={r.id}
+                                            className={`ratio-option ${selectedRatio === r.id ? 'active' : ''}`}
+                                            onClick={() => setSelectedRatio(r.id)}
+                                        >
+                                            {r.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {selectedModel === 'gemini-3-pro-image-preview' && (
+                                <div className="control-section">
+                                    <label className="control-label">分辨率</label>
+                                    <div className="resolution-options">
+                                        {RESOLUTIONS.map((res) => (
                                             <button
-                                                className="result-btn"
-                                                onClick={() => {
-                                                    setReferenceImage({ data: resultImage, mimeType: 'image/png' });
-                                                    setActiveMode('img2img');
-                                                }}
+                                                key={res.id}
+                                                className={`resolution-option ${selectedResolution === res.id ? 'active' : ''}`}
+                                                onClick={() => setSelectedResolution(res.id)}
                                             >
-                                                <span>🎨</span>
-                                                <span>以此为参考</span>
+                                                {res.name}
                                             </button>
-                                        </div>
+                                        ))}
                                     </div>
-                                ) : (
-                                    <div className="empty-state">
-                                        <div className="empty-icon">🍌</div>
-                                        <p className="empty-title">准备好开始创作了吗？</p>
-                                        <p className="empty-desc">
-                                            {activeMode === 'text2img' && '输入提示词，让 AI 为你生成独特的图片'}
-                                            {activeMode === 'img2img' && '上传参考图片，让 AI 在此基础上创作'}
-                                            {activeMode === 'outpaint' && '上传图片并扩展边界，创造更大画面'}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                                </div>
+                            )}
 
-                    {activeView === 'assets' && (
-                        <div className="pro-assets-view">
-                            {Object.keys(groupedHistory).length > 0 ? (
-                                Object.entries(groupedHistory).map(([date, items]: [string, any]) => (
-                                    <div key={date} className="date-group">
-                                        <h3 className="date-group-title">{date}</h3>
-                                        <div className="asset-grid">
+                            <button
+                                className="generate-button"
+                                disabled={isGenerating || !prompt.trim()}
+                                onClick={handleGenerate}
+                            >
+                                {isGenerating ? (
+                                    <>
+                                        <span className="btn-spinner"></span>
+                                        生成中 {Math.round(generationProgress)}%
+                                    </>
+                                ) : (
+                                    <>开始生成</>
+                                )}
+                            </button>
+
+                            {error && (
+                                <div className="error-alert">
+                                    {error}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="preview-panel">
+                            {isGenerating ? (
+                                <div className="generating-view">
+                                    <div className="progress-circle">
+                                        <svg viewBox="0 0 100 100">
+                                            <circle className="circle-bg" cx="50" cy="50" r="45" />
+                                            <circle 
+                                                className="circle-progress" 
+                                                cx="50" 
+                                                cy="50" 
+                                                r="45"
+                                                style={{
+                                                    strokeDasharray: `${2 * Math.PI * 45}`,
+                                                    strokeDashoffset: `${2 * Math.PI * 45 * (1 - generationProgress / 100)}`,
+                                                }}
+                                            />
+                                        </svg>
+                                        <span className="progress-value">{Math.round(generationProgress)}%</span>
+                                    </div>
+                                    <p>正在创作中...</p>
+                                </div>
+                            ) : resultImage ? (
+                                <div className="result-view">
+                                    <div className="result-image-container">
+                                        <img src={resultImage} alt="Generated" />
+                                    </div>
+                                    <div className="result-toolbar">
+                                        <button className="toolbar-btn primary" onClick={handleDownload}>
+                                            下载
+                                        </button>
+                                        <button className="toolbar-btn" onClick={handleCopy}>
+                                            复制
+                                        </button>
+                                        <button 
+                                            className="toolbar-btn"
+                                            onClick={() => {
+                                                setReferenceImage({ data: resultImage, mimeType: 'image/png' });
+                                                setActiveMode('img2img');
+                                            }}
+                                        >
+                                            参考创作
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="empty-view">
+                                    <div className="empty-illustration">
+                                        <span className="empty-emoji">🎨</span>
+                                    </div>
+                                    <h3>开始你的创作</h3>
+                                    <p>
+                                        {activeMode === 'text2img' && '输入提示词，AI 将为你生成独特图片'}
+                                        {activeMode === 'img2img' && '上传参考图，AI 将在此基础上创作'}
+                                        {activeMode === 'outpaint' && '上传图片并扩展边界，创造更大画面'}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'history' && (
+                    <div className="history-view">
+                        <h2 className="view-title">生成历史</h2>
+                        {Object.keys(groupedHistory).length > 0 ? (
+                            <div className="history-list">
+                                {Object.entries(groupedHistory).map(([date, items]: [string, any]) => (
+                                    <div key={date} className="history-group">
+                                        <h3 className="history-date">{date}</h3>
+                                        <div className="history-grid">
                                             {items.map((item: HistoryItem) => (
                                                 <div
                                                     key={item.id}
-                                                    className="asset-card"
+                                                    className="history-item"
                                                     onClick={() => {
                                                         setResultImage(item.imageUrl);
                                                         setPrompt(item.prompt);
-                                                        setActiveView('generate');
+                                                        setActiveTab('generate');
                                                     }}
                                                 >
-                                                    <img src={item.thumbnailUrl || item.imageUrl} alt={item.prompt} loading="lazy" />
-                                                    <div className="asset-card-overlay">
-                                                        <span className="asset-card-mode">{getModeLabel(item.mode)}</span>
-                                                        <p className="asset-card-prompt">{item.prompt}</p>
+                                                    <img src={item.thumbnailUrl || item.imageUrl} alt="" loading="lazy" />
+                                                    <div className="history-overlay">
+                                                        <span className="history-mode">{getModeLabel(item.mode)}</span>
+                                                        <p className="history-prompt">{item.prompt}</p>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="empty-assets">
-                                    <span className="empty-assets-icon">📭</span>
-                                    <p>暂无生成记录</p>
-                                    <p className="empty-assets-hint">开始创作你的第一幅作品吧</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {activeView === 'api' && (
-                        <div className="api-settings">
-                            <div className="api-settings-card">
-                                <h2>API 配置</h2>
-                                <p className="api-settings-desc">请配置您的 Google AI Studio API Key 以开始使用</p>
-                                
-                                <div className="api-input-group">
-                                    <label>API Key</label>
-                                    <input
-                                        type="password"
-                                        value={apiKey}
-                                        onChange={(e) => {
-                                            setApiKey(e.target.value);
-                                            localStorage.setItem('gemini_api_key', e.target.value);
-                                        }}
-                                        placeholder="输入您的 API Key"
-                                    />
-                                    <p className="api-input-hint">
-                                        API Key 仅存储在本地浏览器中，不会上传到服务器
-                                    </p>
-                                </div>
-
-                                <div className="api-info">
-                                    <h3>如何获取 API Key？</h3>
-                                    <ol>
-                                        <li>访问 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a></li>
-                                        <li>登录您的 Google 账号</li>
-                                        <li>点击 &quot;Create API Key&quot; 创建新密钥</li>
-                                        <li>复制生成的密钥并粘贴到上方输入框</li>
-                                    </ol>
-                                </div>
-
-                                <div className="api-actions">
-                                    <button
-                                        className="api-test-btn"
-                                        onClick={async () => {
-                                            if (!apiKey) {
-                                                alert('请先输入 API Key');
-                                                return;
-                                            }
-                                            try {
-                                                const res = await fetch('/api/gemini', {
-                                                    headers: { 'x-api-key': apiKey },
-                                                });
-                                                const data = await res.json();
-                                                if (data.success) {
-                                                    alert('API Key 验证成功！');
-                                                } else {
-                                                    alert(`验证失败: ${data.error}`);
-                                                }
-                                            } catch {
-                                                alert('验证请求失败');
-                                            }
-                                        }}
-                                        disabled={!apiKey}
-                                    >
-                                        测试连接
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeView === 'inspiration' && (
-                        <div className="inspiration-view">
-                            <div className="inspiration-header">
-                                <h2>灵感画廊</h2>
-                                <p>探索 AI 艺术创作的无限可能</p>
-                            </div>
-                            <div className="inspiration-grid">
-                                {[
-                                    { title: '赛博朋克城市', prompt: 'Cyberpunk city at night, neon lights, rain, futuristic', style: '🌃' },
-                                    { title: '梦幻森林', prompt: 'Enchanted forest with glowing mushrooms, fairy lights, magical atmosphere', style: '🌲' },
-                                    { title: '未来科技', prompt: 'Futuristic technology interface, holographic displays, sleek design', style: '🚀' },
-                                    { title: '古风山水', prompt: 'Traditional Chinese landscape painting, mountains, mist, ink wash style', style: '🏔️' },
-                                    { title: '可爱动物', prompt: 'Cute fluffy kitten playing with yarn, soft lighting, cozy home', style: '🐱' },
-                                    { title: '美食摄影', prompt: 'Gourmet food photography, delicious pasta, professional lighting', style: '🍝' },
-                                ].map((item, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="inspiration-card"
-                                        onClick={() => {
-                                            setPrompt(item.prompt);
-                                            setActiveView('generate');
-                                        }}
-                                    >
-                                        <span className="inspiration-icon">{item.style}</span>
-                                        <h4>{item.title}</h4>
-                                        <p>{item.prompt}</p>
-                                        <button className="inspiration-use-btn">使用此提示词</button>
-                                    </div>
                                 ))}
                             </div>
+                        ) : (
+                            <div className="empty-history">
+                                <span className="empty-icon">📭</span>
+                                <p>暂无生成记录</p>
+                                <button onClick={() => setActiveTab('generate')}>开始创作</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'settings' && (
+                    <div className="settings-view">
+                        <div className="settings-card">
+                            <h2>设置</h2>
+                            
+                            <div className="setting-item">
+                                <label>Google AI API Key</label>
+                                <input
+                                    type="password"
+                                    value={apiKey}
+                                    onChange={(e) => {
+                                        setApiKey(e.target.value);
+                                        localStorage.setItem('gemini_api_key', e.target.value);
+                                    }}
+                                    placeholder="输入 API Key"
+                                />
+                                <p className="setting-hint">
+                                    API Key 仅存储在本地浏览器中
+                                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">
+                                        获取 API Key
+                                    </a>
+                                </p>
+                            </div>
+
+                            <div className="setting-actions">
+                                <button
+                                    className="test-api-btn"
+                                    onClick={async () => {
+                                        if (!apiKey) {
+                                            alert('请先输入 API Key');
+                                            return;
+                                        }
+                                        try {
+                                            const res = await fetch('/api/gemini', {
+                                                headers: { 'x-api-key': apiKey },
+                                            });
+                                            const data = await res.json();
+                                            alert(data.success ? 'API Key 有效' : data.error);
+                                        } catch {
+                                            alert('测试失败');
+                                        }
+                                    }}
+                                    disabled={!apiKey}
+                                >
+                                    测试 API 连接
+                                </button>
+                            </div>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </main>
         </div>
     );
