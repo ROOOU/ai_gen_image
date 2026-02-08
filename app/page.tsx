@@ -119,14 +119,18 @@ export default function Home() {
             }
 
             if (activeMode === 'outpaint' && outpaintData) {
+                body.mode = 'outpaint';
                 body.images = [
                     { data: outpaintData.compositeImage, mimeType: 'image/jpeg' },
                     { data: outpaintData.maskImage, mimeType: 'image/png' },
                 ];
             } else if (activeMode === 'img2img' && referenceImage?.data) {
+                body.mode = 'img2img';
                 body.images = [
                     { data: referenceImage.data, mimeType: referenceImage.mimeType },
                 ];
+            } else {
+                body.mode = 'text2img';
             }
 
             const res = await fetch('/api/gemini', {

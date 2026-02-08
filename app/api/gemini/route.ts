@@ -11,7 +11,8 @@ import { GoogleGenAI } from '@google/genai';
  * - model: string - 模型 ID
  * - aspectRatio?: string - 图片比例
  * - imageSize?: string - 分辨率（仅 gemini-3-pro-image-preview）
- * - images?: Array<{ data: string, mimeType: string }> - 参考图片（图生图模式）
+ * - images?: Array<{ data: string, mimeType: string }> - 参考图片（图生图/扩图模式）
+ * - mode?: 'text2img' | 'img2img' | 'outpaint' - 生成模式
  * 
  * 请求头:
  * - x-api-key: string - Google AI Studio API Key
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { prompt, model, aspectRatio, imageSize, images } = body;
+        const { prompt, model, aspectRatio, imageSize, images, mode = 'text2img' } = body;
 
         if (!prompt || prompt.trim() === '') {
             return NextResponse.json(
@@ -85,12 +86,48 @@ export async function POST(request: Request) {
         // 构建内容
         let contents: any;
 
-        if (images && Array.isArray(images) && images.length > 0) {
-            // 图生图模式
+        if (mode === 'outpaint' && hasInputImages && images.length >= 2) {
+            // 扩图模式：使用特殊的 prompt 结构和图像顺序
+            // 第一张图：composite（画布+原图）
+            // 第二张图：mask（黑色=保留，白色=生成）
+            
+            const compositeBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
+            const maskBase64 = images[1].data.replace(/^data:[^;]+;base64,/, '');
+            
+            // 构建扩图专用内容
+            contents = [
+                // 先发送 mask 作为参考（白色区域是要生成的）
+                {
+                    inlineData: {
+                        mimeType: 'image/png',
+                        data: maskBase64,
+                    },
+                },
+                // 再发送 composite（包含原图的画布）
+                {
+                    inlineData: {
+                        mimeType: 'image/jpeg',
+                        data: compositeBase64,
+                    },
+                },
+                // 最后发送提示词
+                {
+                    text: `${prompt}. Expand this image to fill the canvas, seamlessly extending the content. Match the original style, lighting, and perspective. The white areas in the mask indicate where new content should be generated.`,
+                },
+            ];
+            
+            console.log('[Gemini API] Outpainting mode:', {
+                model,
+                promptLength: prompt.length,
+                compositeSize: compositeBase64.length,
+                maskSize: maskBase64.length,
+                aspectRatio,
+            });
+        } else if (hasInputImages) {
+            // 普通图生图模式
             contents = [{ text: prompt }];
 
             for (const img of images) {
-                // 从 data URL 提取 base64 数据
                 const base64Data = img.data.replace(/^data:[^;]+;base64,/, '');
                 contents.push({
                     inlineData: {
@@ -106,7 +143,7 @@ export async function POST(request: Request) {
 
         console.log('[Gemini API] Generating with:', {
             model,
-            mode: hasInputImages ? 'img2img/outpaint' : 'text2img',
+            mode,
             promptLength: prompt.length,
             imageCount: images?.length || 0,
             config: generateConfig.imageConfig || 'none',
