@@ -45,6 +45,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
     const [resizeStart, setResizeStart] = useState({ width: 0, height: 0, x: 0, y: 0 });
     const [showGrid, setShowGrid] = useState(true);
     const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+    const [expansionPixels, setExpansionPixels] = useState(128);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -135,6 +136,57 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         
         setImageX(Math.max(0, Math.min(currentCenterX - newImgRatioX / 2, 1 - newImgRatioX)));
         setImageY(Math.max(0, Math.min(currentCenterY - newImgRatioY / 2, 1 - newImgRatioY)));
+    };
+
+    const handleExpansionChange = (pixels: number) => {
+        setExpansionPixels(pixels);
+        if (!originalImage) return;
+        
+        const ratioObj = ASPECT_RATIOS.find(r => r.id === selectedRatio);
+        const targetRatio = ratioObj ? ratioObj.ratio : (canvasWidth / canvasHeight);
+        
+        const newWidth = originalImage.width + pixels * 2;
+        const newHeight = originalImage.height + pixels * 2;
+        
+        let finalWidth = newWidth;
+        let finalHeight = finalWidth / targetRatio;
+        
+        if (finalHeight < newHeight) {
+            finalHeight = newHeight;
+            finalWidth = finalHeight * targetRatio;
+        }
+        
+        setCanvasWidth(Math.round(finalWidth));
+        setCanvasHeight(Math.round(finalHeight));
+        setImageX(pixels / finalWidth);
+        setImageY(pixels / finalHeight);
+    };
+
+    const extendCanvas = (direction: 'top' | 'bottom' | 'left' | 'right') => {
+        if (!originalImage) return;
+        
+        const ratioObj = ASPECT_RATIOS.find(r => r.id === selectedRatio);
+        const targetRatio = ratioObj ? ratioObj.ratio : (canvasWidth / canvasHeight);
+        
+        let newWidth = canvasWidth;
+        let newHeight = canvasHeight;
+        
+        if (direction === 'top' || direction === 'bottom') {
+            newHeight = canvasHeight + expansionPixels;
+            newWidth = newHeight * targetRatio;
+        } else {
+            newWidth = canvasWidth + expansionPixels;
+            newHeight = newWidth / targetRatio;
+        }
+        
+        if (direction === 'top') {
+            setImageY(imageY + (expansionPixels / 2) / newHeight);
+        } else if (direction === 'left') {
+            setImageX(imageX + (expansionPixels / 2) / newWidth);
+        }
+        
+        setCanvasWidth(Math.round(newWidth));
+        setCanvasHeight(Math.round(newHeight));
     };
 
     const generateComposite = useCallback(() => {
@@ -393,38 +445,6 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                         </div>
                     </div>
 
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '8px 12px',
-                        background: 'var(--bg-tertiary)',
-                        borderRadius: 8,
-                    }}>
-                        <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            fontSize: 13,
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer',
-                        }}>
-                            <input
-                                type="checkbox"
-                                checked={showGrid}
-                                onChange={(e) => setShowGrid(e.target.checked)}
-                                style={{ cursor: 'pointer' }}
-                            />
-                            显示网格
-                        </label>
-                        <span style={{
-                            fontSize: 11,
-                            color: 'var(--text-muted)',
-                        }}>
-                            {canvasWidth} x {canvasHeight} px
-                        </span>
-                    </div>
-
                     <div
                         ref={containerRef}
                         style={{
@@ -439,6 +459,142 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                             margin: '0 auto',
                         }}
                     >
+                        {/* Top expansion arrow */}
+                        <div style={{
+                            position: 'absolute',
+                            top: -36,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 4,
+                            zIndex: 20,
+                        }}>
+                            <button
+                                onClick={() => extendCanvas('top')}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    background: 'var(--accent)',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: 14,
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                    transition: 'transform 0.2s ease',
+                                }}
+                                title="向上扩展"
+                            >
+                                ↑
+                            </button>
+                        </div>
+
+                        {/* Bottom expansion arrow */}
+                        <div style={{
+                            position: 'absolute',
+                            bottom: -36,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 4,
+                            zIndex: 20,
+                        }}>
+                            <button
+                                onClick={() => extendCanvas('bottom')}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    background: 'var(--accent)',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: 14,
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                    transition: 'transform 0.2s ease',
+                                }}
+                                title="向下扩展"
+                            >
+                                ↓
+                            </button>
+                        </div>
+
+                        {/* Left expansion arrow */}
+                        <div style={{
+                            position: 'absolute',
+                            left: -36,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            display: 'flex',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            zIndex: 20,
+                        }}>
+                            <button
+                                onClick={() => extendCanvas('left')}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    background: 'var(--accent)',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: 14,
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                    transition: 'transform 0.2s ease',
+                                }}
+                                title="向左扩展"
+                            >
+                                ←
+                            </button>
+                        </div>
+
+                        {/* Right expansion arrow */}
+                        <div style={{
+                            position: 'absolute',
+                            right: -36,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            display: 'flex',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            zIndex: 20,
+                        }}>
+                            <button
+                                onClick={() => extendCanvas('right')}
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    background: 'var(--accent)',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: 14,
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                                    transition: 'transform 0.2s ease',
+                                }}
+                                title="向右扩展"
+                            >
+                                →
+                            </button>
+                        </div>
+
                         <div
                             onMouseDown={handleMouseDown}
                             style={{
@@ -617,17 +773,78 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                         />
                     </div>
 
+                    {/* Expansion slider control */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '12px 16px',
+                        background: 'var(--bg-tertiary)',
+                        borderRadius: 8,
+                    }}>
+                        <label style={{
+                            fontSize: 13,
+                            color: 'var(--text-secondary)',
+                            whiteSpace: 'nowrap',
+                        }}>
+                            扩图像素
+                        </label>
+                        <input
+                            type="range"
+                            min="64"
+                            max="512"
+                            step="32"
+                            value={expansionPixels}
+                            onChange={(e) => handleExpansionChange(Number(e.target.value))}
+                            style={{
+                                flex: 1,
+                                height: 6,
+                                borderRadius: 3,
+                                appearance: 'none',
+                                background: 'var(--bg-hover)',
+                                cursor: 'pointer',
+                            }}
+                        />
+                        <span style={{
+                            fontSize: 13,
+                            color: 'var(--text-primary)',
+                            fontWeight: 500,
+                            minWidth: 48,
+                            textAlign: 'right',
+                        }}>
+                            {expansionPixels}px
+                        </span>
+                    </div>
+
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                     }}>
-                        <p style={{
-                            fontSize: 12,
-                            color: 'var(--text-secondary)',
-                        }}>
-                            💡 拖拽图片调整位置，拖拽边缘调整画布大小
-                        </p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                fontSize: 13,
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer',
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={showGrid}
+                                    onChange={(e) => setShowGrid(e.target.checked)}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                显示网格
+                            </label>
+                            <span style={{
+                                fontSize: 11,
+                                color: 'var(--text-muted)',
+                            }}>
+                                {canvasWidth} x {canvasHeight} px
+                            </span>
+                        </div>
                         <button
                             onClick={clearImage}
                             style={{
