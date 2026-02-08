@@ -17,6 +17,7 @@ interface OutpaintEditorProps {
         targetHeight: number;
         scale: number;
     }) => void;
+    aspectRatio: string;
 }
 
 const ASPECT_RATIOS = [
@@ -29,12 +30,11 @@ const ASPECT_RATIOS = [
     { id: '3:4', ratio: 3/4, name: '3:4' },
 ];
 
-export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps) {
+export default function OutpaintEditor({ onCompositeReady, aspectRatio }: OutpaintEditorProps) {
     const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
     const [originalDataUrl, setOriginalDataUrl] = useState<string>('');
     const [canvasWidth, setCanvasWidth] = useState(1024);
     const [canvasHeight, setCanvasHeight] = useState(1024);
-    const [selectedRatio, setSelectedRatio] = useState('1:1');
     const [imageX, setImageX] = useState(0.25);
     const [imageY, setImageY] = useState(0.25);
     const [isDragging, setIsDragging] = useState(false);
@@ -52,6 +52,12 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
     const fileInputRef = useRef<HTMLInputElement>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
+    // Get target aspect ratio
+    const getTargetRatio = useCallback(() => {
+        const ratioObj = ASPECT_RATIOS.find(r => r.id === aspectRatio);
+        return ratioObj ? ratioObj.ratio : 1;
+    }, [aspectRatio]);
+
     useEffect(() => {
         const updateSize = () => {
             if (wrapperRef.current) {
@@ -63,6 +69,29 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         window.addEventListener('resize', updateSize);
         return () => window.removeEventListener('resize', updateSize);
     }, []);
+
+    // Recalculate canvas when aspect ratio changes or image is loaded
+    useEffect(() => {
+        if (originalImage) {
+            const targetRatio = getTargetRatio();
+            const imgRatio = originalImage.width / originalImage.height;
+            
+            let newWidth, newHeight;
+            
+            if (imgRatio > targetRatio) {
+                newWidth = Math.max(originalImage.width * 1.5, 1024);
+                newHeight = newWidth / targetRatio;
+            } else {
+                newHeight = Math.max(originalImage.height * 1.5, 1024);
+                newWidth = newHeight * targetRatio;
+            }
+            
+            setCanvasWidth(Math.round(newWidth));
+            setCanvasHeight(Math.round(newHeight));
+            setImageX((1 - originalImage.width / newWidth) / 2);
+            setImageY((1 - originalImage.height / newHeight) / 2);
+        }
+    }, [aspectRatio, originalImage, getTargetRatio]);
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -85,11 +114,10 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
             const img = new Image();
             img.onload = () => {
                 setOriginalImage(img);
-                const ratioObj = ASPECT_RATIOS.find(r => r.id === selectedRatio);
-                const targetRatio = ratioObj ? ratioObj.ratio : 1;
+                const targetRatio = getTargetRatio();
+                const imgRatio = img.width / img.height;
                 
                 let newWidth, newHeight;
-                const imgRatio = img.width / img.height;
                 
                 if (imgRatio > targetRatio) {
                     newWidth = Math.max(img.width * 1.5, 1024);
@@ -109,41 +137,11 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         reader.readAsDataURL(file);
     };
 
-    const handleRatioChange = (ratioId: string) => {
-        setSelectedRatio(ratioId);
-        if (!originalImage) return;
-        
-        const ratioObj = ASPECT_RATIOS.find(r => r.id === ratioId);
-        if (!ratioObj) return;
-        
-        const targetRatio = ratioObj.ratio;
-        const currentCenterX = imageX + (originalImage.width / canvasWidth) / 2;
-        const currentCenterY = imageY + (originalImage.height / canvasHeight) / 2;
-        
-        let newWidth = canvasWidth;
-        let newHeight = newWidth / targetRatio;
-        
-        if (newHeight < originalImage.height * 1.2) {
-            newHeight = originalImage.height * 1.2;
-            newWidth = newHeight * targetRatio;
-        }
-        
-        setCanvasWidth(Math.round(newWidth));
-        setCanvasHeight(Math.round(newHeight));
-        
-        const newImgRatioX = originalImage.width / newWidth;
-        const newImgRatioY = originalImage.height / newHeight;
-        
-        setImageX(Math.max(0, Math.min(currentCenterX - newImgRatioX / 2, 1 - newImgRatioX)));
-        setImageY(Math.max(0, Math.min(currentCenterY - newImgRatioY / 2, 1 - newImgRatioY)));
-    };
-
     const handleExpansionChange = (pixels: number) => {
         setExpansionPixels(pixels);
         if (!originalImage) return;
         
-        const ratioObj = ASPECT_RATIOS.find(r => r.id === selectedRatio);
-        const targetRatio = ratioObj ? ratioObj.ratio : (canvasWidth / canvasHeight);
+        const targetRatio = getTargetRatio();
         
         const newWidth = originalImage.width + pixels * 2;
         const newHeight = originalImage.height + pixels * 2;
@@ -165,8 +163,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
     const extendCanvas = (direction: 'top' | 'bottom' | 'left' | 'right') => {
         if (!originalImage) return;
         
-        const ratioObj = ASPECT_RATIOS.find(r => r.id === selectedRatio);
-        const targetRatio = ratioObj ? ratioObj.ratio : (canvasWidth / canvasHeight);
+        const targetRatio = getTargetRatio();
         
         let newWidth = canvasWidth;
         let newHeight = canvasHeight;
@@ -271,8 +268,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
         }
         
         if (isResizing && resizeEdge && originalImage) {
-            const ratioObj = ASPECT_RATIOS.find(r => r.id === selectedRatio);
-            const targetRatio = ratioObj ? ratioObj.ratio : (canvasWidth / canvasHeight);
+            const targetRatio = getTargetRatio();
             
             const dx = e.clientX - resizeStart.x;
             const dy = e.clientY - resizeStart.y;
@@ -301,7 +297,7 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                 setCanvasHeight(Math.round(newHeight));
             }
         }
-    }, [isDragging, isResizing, resizeEdge, dragStart, dragImageStart, canvasWidth, canvasHeight, originalImage, resizeStart, selectedRatio]);
+    }, [isDragging, isResizing, resizeEdge, dragStart, dragImageStart, canvasWidth, canvasHeight, originalImage, resizeStart, getTargetRatio]);
 
     const handleMouseUp = useCallback(() => {
         setIsDragging(false);
@@ -409,42 +405,6 @@ export default function OutpaintEditor({ onCompositeReady }: OutpaintEditorProps
                 </div>
             ) : (
                 <>
-                    <div>
-                        <p style={{
-                            fontSize: 12,
-                            color: 'var(--text-secondary)',
-                            marginBottom: 8,
-                            fontWeight: 500,
-                        }}>画布比例</p>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(4, 1fr)',
-                            gap: 8,
-                        }}>
-                            {ASPECT_RATIOS.map(r => (
-                                <button
-                                    key={r.id}
-                                    onClick={() => handleRatioChange(r.id)}
-                                    style={{
-                                        padding: '10px 8px',
-                                        background: selectedRatio === r.id 
-                                            ? 'var(--accent)' 
-                                            : 'var(--bg-tertiary)',
-                                        border: 'none',
-                                        borderRadius: 8,
-                                        color: selectedRatio === r.id ? '#000' : 'var(--text-secondary)',
-                                        fontSize: 13,
-                                        fontWeight: selectedRatio === r.id ? 600 : 500,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease',
-                                    }}
-                                >
-                                    {r.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
                     <div
                         ref={containerRef}
                         style={{

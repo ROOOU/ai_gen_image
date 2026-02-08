@@ -437,7 +437,10 @@ export default function Home() {
                             {activeMode === 'outpaint' && (
                                 <div className="control-section">
                                     <label className="control-label">扩图编辑</label>
-                                    <OutpaintEditor onCompositeReady={setOutpaintData} />
+                                    <OutpaintEditor 
+                                        onCompositeReady={setOutpaintData}
+                                        aspectRatio={selectedRatio}
+                                    />
                                 </div>
                             )}
 
