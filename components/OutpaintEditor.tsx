@@ -54,16 +54,8 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [dragImageStart, setDragImageStart] = useState({ x: 0, y: 0 });
 
-    // Masked Outpainting states
-    const [isDrawing, setIsDrawing] = useState(false);
-    const [brushSize, setBrushSize] = useState(30);
-    const [showMask, setShowMask] = useState(false);
-    const [customMaskData, setCustomMaskData] = useState<ImageData | null>(null);
-
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const maskCanvasRef = useRef<HTMLCanvasElement>(null);
-    const displayMaskCanvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const activeRatio = ASPECT_RATIOS.find(r => r.id === aspectRatio) || ASPECT_RATIOS[0];
@@ -76,38 +68,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
         setCanvasHeight(Math.round(targetHeight));
     }, [activeRatio]);
 
-    // Initialize mask canvas when image is loaded or mode changes
-    useEffect(() => {
-        if (originalImage && outpaintMode === 'masked' && maskCanvasRef.current) {
-            const maskCanvas = maskCanvasRef.current;
-            maskCanvas.width = canvasWidth;
-            maskCanvas.height = canvasHeight;
-            const maskCtx = maskCanvas.getContext('2d');
-            if (maskCtx) {
-                // Fill with black (keep original)
-                maskCtx.fillStyle = '#000000';
-                maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-                // Draw original image area as black
-                const drawW = originalImage.width * imageScale;
-                const drawH = originalImage.height * imageScale;
-                const drawX = imageX * canvasWidth;
-                const drawY = imageY * canvasHeight;
-                maskCtx.fillRect(drawX, drawY, drawW, drawH);
-            }
-
-            // Also initialize display mask canvas
-            if (displayMaskCanvasRef.current) {
-                displayMaskCanvasRef.current.width = canvasWidth;
-                displayMaskCanvasRef.current.height = canvasHeight;
-                const displayCtx = displayMaskCanvasRef.current.getContext('2d');
-                if (displayCtx) {
-                    displayCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                    displayCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-                }
-            }
-        }
-    }, [originalImage, outpaintMode, canvasWidth, canvasHeight, imageX, imageY, imageScale]);
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -178,16 +139,11 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
         maskCanvas.height = canvasHeight;
         const maskCtx = maskCanvas.getContext('2d');
         if (maskCtx) {
-            if (outpaintMode === 'masked' && customMaskData) {
-                // Use custom drawn mask
-                maskCtx.putImageData(customMaskData, 0, 0);
-            } else {
-                // Standard mode: white background, black original
-                maskCtx.fillStyle = '#FFFFFF';
-                maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-                maskCtx.fillStyle = '#000000';
-                maskCtx.fillRect(drawX, drawY, drawW, drawH);
-            }
+            // Auto-generate mask: white = area to generate, black = keep original
+            maskCtx.fillStyle = '#FFFFFF';
+            maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+            maskCtx.fillStyle = '#000000';
+            maskCtx.fillRect(drawX, drawY, drawW, drawH);
 
             onCompositeReady({
                 compositeImage: compositeData,
@@ -204,7 +160,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                 scale: imageScale,
             });
         }
-    }, [originalImage, originalDataUrl, canvasWidth, canvasHeight, imageX, imageY, imageScale, outpaintMode, customMaskData, onCompositeReady]);
+    }, [originalImage, originalDataUrl, canvasWidth, canvasHeight, imageX, imageY, imageScale, onCompositeReady]);
 
     // Use debounced version for updates during drag
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,88 +179,10 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
         }
     }, [imageX, imageY, imageScale, canvasWidth, canvasHeight, generateComposite, originalImage, isDragging, debouncedGenerateComposite]);
 
-    // Mask drawing handlers
-    const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!displayMaskCanvasRef.current) return { x: 0, y: 0 };
-        const canvas = displayMaskCanvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        return {
-            x: (e.clientX - rect.left) * scaleX,
-            y: (e.clientY - rect.top) * scaleY,
-        };
-    };
 
-    const handleMaskMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (outpaintMode !== 'masked') return;
-        setIsDrawing(true);
-        const pos = getMousePos(e);
-        drawOnMask(pos.x, pos.y);
-    };
-
-    const handleMaskMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        if (!isDrawing || outpaintMode !== 'masked') return;
-        const pos = getMousePos(e);
-        drawOnMask(pos.x, pos.y);
-    };
-
-    const handleMaskMouseUp = () => {
-        setIsDrawing(false);
-        // Save mask data
-        if (maskCanvasRef.current) {
-            const maskCtx = maskCanvasRef.current.getContext('2d');
-            if (maskCtx) {
-                const imageData = maskCtx.getImageData(0, 0, canvasWidth, canvasHeight);
-                setCustomMaskData(imageData);
-            }
-        }
-    };
-
-    const drawOnMask = (x: number, y: number) => {
-        // Draw on actual mask canvas (black = keep, white = generate)
-        if (maskCanvasRef.current) {
-            const maskCtx = maskCanvasRef.current.getContext('2d');
-            if (maskCtx) {
-                maskCtx.beginPath();
-                maskCtx.arc(x, y, brushSize, 0, Math.PI * 2);
-                maskCtx.fillStyle = '#FFFFFF'; // White = generate
-                maskCtx.fill();
-            }
-        }
-
-        // Draw on display mask canvas (semi-transparent red overlay)
-        if (displayMaskCanvasRef.current) {
-            const displayCtx = displayMaskCanvasRef.current.getContext('2d');
-            if (displayCtx) {
-                displayCtx.beginPath();
-                displayCtx.arc(x, y, brushSize, 0, Math.PI * 2);
-                displayCtx.fillStyle = 'rgba(255, 100, 100, 0.7)';
-                displayCtx.fill();
-            }
-        }
-    };
-
-    const clearMask = () => {
-        if (maskCanvasRef.current) {
-            const maskCtx = maskCanvasRef.current.getContext('2d');
-            if (maskCtx) {
-                maskCtx.fillStyle = '#000000';
-                maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-            }
-        }
-        if (displayMaskCanvasRef.current) {
-            const displayCtx = displayMaskCanvasRef.current.getContext('2d');
-            if (displayCtx) {
-                displayCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                displayCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-            }
-        }
-        setCustomMaskData(null);
-    };
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        if (!originalImage || outpaintMode === 'masked') return;
+        if (!originalImage) return;
         setIsDragging(true);
         setDragStart({ x: e.clientX, y: e.clientY });
         setDragImageStart({ x: imageX, y: imageY });
@@ -363,46 +241,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                 </div>
             )}
 
-            {/* Masked Mode Controls */}
-            {originalImage && outpaintMode === 'masked' && (
-                <div className="flex flex-col gap-3 p-4 bg-[var(--bg-tertiary)] rounded-xl w-full max-w-[400px]">
-                    <div className="text-[13px] text-[var(--text-secondary)] mb-1">
-                        🖌️ 使用画笔绘制想要扩展的区域（红色区域将被 AI 生成）
-                    </div>
 
-                    {/* Brush Size */}
-                    <div className="flex items-center gap-3">
-                        <span className="text-[13px] text-[var(--text-secondary)] min-w-[60px]">画笔大小</span>
-                        <input
-                            type="range"
-                            min="10"
-                            max="100"
-                            value={brushSize}
-                            onChange={(e) => setBrushSize(Number(e.target.value))}
-                            className="flex-1"
-                        />
-                        <span className="text-[13px] text-[var(--text-primary)] min-w-[30px]">{brushSize}px</span>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setShowMask(!showMask)}
-                            className="flex-1 py-2 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-[13px] cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                            <Icons.Eye />
-                            {showMask ? '隐藏遮罩' : '显示遮罩'}
-                        </button>
-                        <button
-                            onClick={clearMask}
-                            className="flex-1 py-2 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-[13px] cursor-pointer flex items-center justify-center gap-1.5"
-                        >
-                            <Icons.Eraser />
-                            清除遮罩
-                        </button>
-                    </div>
-                </div>
-            )}
 
             <div className="editor-canvas-container transparency-grid" ref={containerRef}>
                 {/* Ratio Dropdown */}
@@ -468,19 +307,15 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                         {/* Hidden actual canvas for composing */}
                         <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-                        {/* Hidden mask canvas */}
-                        <canvas ref={maskCanvasRef} style={{ display: 'none' }} />
-
                         {/* Draggable Image Layer */}
                         <div
                             onMouseDown={handleMouseDown}
-                            className={`absolute z-10 ${outpaintMode === 'standard' ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default pointer-events-none'}`}
+                            className={`absolute z-10 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                             style={{
                                 left: `${imageX * 100}%`,
                                 top: `${imageY * 100}%`,
                                 width: `${(originalImage.width * imageScale / canvasWidth) * 100}%`,
                                 height: `${(originalImage.height * imageScale / canvasHeight) * 100}%`,
-                                pointerEvents: outpaintMode === 'standard' ? 'auto' : 'none',
                             }}
                         >
                             <img
@@ -490,24 +325,12 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                                 draggable={false}
                             />
                         </div>
-
-                        {/* Mask Drawing Canvas */}
-                        {outpaintMode === 'masked' && (
-                            <canvas
-                                ref={displayMaskCanvasRef}
-                                onMouseDown={handleMaskMouseDown}
-                                onMouseMove={handleMaskMouseMove}
-                                onMouseUp={handleMaskMouseUp}
-                                onMouseLeave={handleMaskMouseUp}
-                                className={`absolute top-0 left-0 w-full h-full z-20 cursor-crosshair pointer-events-auto transition-opacity duration-200 ${showMask ? 'opacity-100' : 'opacity-30'}`}
-                            />
-                        )}
                     </div>
                 )}
             </div>
 
             {/* Alignment Toolbar */}
-            {originalImage && outpaintMode === 'standard' && (
+            {originalImage && (
                 <div className="flex flex-col items-center gap-3">
                     <div className="alignment-toolbar">
                         <button className="toolbar-icon-btn" title="左对齐" onClick={() => alignImage('left', 'middle')}><Icons.AlignLeft /></button>
@@ -527,7 +350,6 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                     onClick={() => {
                         setOriginalImage(null);
                         setOriginalDataUrl('');
-                        setCustomMaskData(null);
                         if (fileInputRef.current) fileInputRef.current.value = '';
                     }}
                     className="py-1.5 px-3 bg-transparent border border-[var(--border)] rounded-md text-[var(--text-secondary)] text-xs cursor-pointer"
