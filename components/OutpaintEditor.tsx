@@ -1,6 +1,5 @@
-'use client';
-
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { Icons } from './Icons';
 
 interface OutpaintEditorProps {
     onCompositeReady: (data: {
@@ -30,6 +29,15 @@ const ASPECT_RATIOS = [
 ];
 
 type OutpaintMode = 'standard' | 'masked';
+
+// Debounce helper
+function debounce<T extends (...args: any[]) => void>(func: T, wait: number): T {
+    let timeout: NodeJS.Timeout;
+    return ((...args: any[]) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), wait);
+    }) as T;
+}
 
 export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspectRatioChange }: OutpaintEditorProps) {
     const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
@@ -79,7 +87,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                 // Fill with black (keep original)
                 maskCtx.fillStyle = '#000000';
                 maskCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-                
+
                 // Draw original image area as black
                 const drawW = originalImage.width * imageScale;
                 const drawH = originalImage.height * imageScale;
@@ -87,7 +95,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                 const drawY = imageY * canvasHeight;
                 maskCtx.fillRect(drawX, drawY, drawW, drawH);
             }
-            
+
             // Also initialize display mask canvas
             if (displayMaskCanvasRef.current) {
                 displayMaskCanvasRef.current.width = canvasWidth;
@@ -198,11 +206,22 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
         }
     }, [originalImage, originalDataUrl, canvasWidth, canvasHeight, imageX, imageY, imageScale, outpaintMode, customMaskData, onCompositeReady]);
 
+    // Use debounced version for updates during drag
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const debouncedGenerateComposite = useCallback(
+        debounce(() => generateComposite(), 100),
+        [generateComposite]
+    );
+
     useEffect(() => {
         if (originalImage) {
-            generateComposite();
+            if (isDragging) {
+                debouncedGenerateComposite();
+            } else {
+                generateComposite();
+            }
         }
-    }, [imageX, imageY, imageScale, canvasWidth, canvasHeight, generateComposite, originalImage]);
+    }, [imageX, imageY, imageScale, canvasWidth, canvasHeight, generateComposite, originalImage, isDragging, debouncedGenerateComposite]);
 
     // Mask drawing handlers
     const getMousePos = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -318,63 +337,26 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
         }
     }, [isDragging, handleMouseMove, handleMouseUp]);
 
-    // UI Icons
-    const Icons = {
-        AlignLeft: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h10M4 18h16" /></svg>,
-        AlignCenter: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6h12M4 12h16M6 18h12" /></svg>,
-        AlignRight: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M10 12h10M4 18h16" /></svg>,
-        AlignTop: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: 'rotate(90deg)' }}><path d="M4 6h16M10 12h10M4 18h16" /></svg>,
-        AlignMiddle: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: 'rotate(90deg)' }}><path d="M6 6h12M4 12h16M6 18h12" /></svg>,
-        AlignBottom: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: 'rotate(90deg)' }}><path d="M4 6h16M4 12h10M4 18h16" /></svg>,
-        Brush: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l9 9-9 9-9-9 9-9z" /><path d="M7 17v5h10v-5" /></svg>,
-        Eye: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M2 12s4-8 10-8 10 8 10 8-4 8-10 8-10-8-10-8z" /></svg>,
-        Eraser: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 20H9l-7-7 9-9 9 9-7 7h7z" /></svg>,
-    };
-
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', gap: 16 }}>
+        <div className="flex flex-col items-center w-full gap-4">
             {/* Mode Selection */}
             {originalImage && (
-                <div style={{ 
-                    display: 'flex', 
-                    gap: 8, 
-                    padding: 4, 
-                    background: 'var(--bg-tertiary)', 
-                    borderRadius: 8,
-                    width: '100%',
-                    maxWidth: 400
-                }}>
+                <div className="flex gap-2 p-1 bg-[var(--bg-tertiary)] rounded-lg w-full max-w-[400px]">
                     <button
                         onClick={() => setOutpaintMode('standard')}
-                        style={{
-                            flex: 1,
-                            padding: '10px 16px',
-                            borderRadius: 6,
-                            border: 'none',
-                            background: outpaintMode === 'standard' ? 'var(--accent)' : 'transparent',
-                            color: outpaintMode === 'standard' ? '#000' : 'var(--text-secondary)',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                        }}
+                        className={`flex-1 py-2.5 px-4 rounded-md border-none text-sm font-medium cursor-pointer transition-all duration-200 ${outpaintMode === 'standard'
+                            ? 'bg-[var(--accent)] text-black'
+                            : 'bg-transparent text-[var(--text-secondary)]'
+                            }`}
                     >
                         标准扩图
                     </button>
                     <button
                         onClick={() => setOutpaintMode('masked')}
-                        style={{
-                            flex: 1,
-                            padding: '10px 16px',
-                            borderRadius: 6,
-                            border: 'none',
-                            background: outpaintMode === 'masked' ? 'var(--accent)' : 'transparent',
-                            color: outpaintMode === 'masked' ? '#000' : 'var(--text-secondary)',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                        }}
+                        className={`flex-1 py-2.5 px-4 rounded-md border-none text-sm font-medium cursor-pointer transition-all duration-200 ${outpaintMode === 'masked'
+                            ? 'bg-[var(--accent)] text-black'
+                            : 'bg-transparent text-[var(--text-secondary)]'
+                            }`}
                     >
                         遮罩扩图
                     </button>
@@ -383,72 +365,37 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
 
             {/* Masked Mode Controls */}
             {originalImage && outpaintMode === 'masked' && (
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 12,
-                    padding: 16,
-                    background: 'var(--bg-tertiary)',
-                    borderRadius: 12,
-                    width: '100%',
-                    maxWidth: 400
-                }}>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                <div className="flex flex-col gap-3 p-4 bg-[var(--bg-tertiary)] rounded-xl w-full max-w-[400px]">
+                    <div className="text-[13px] text-[var(--text-secondary)] mb-1">
                         🖌️ 使用画笔绘制想要扩展的区域（红色区域将被 AI 生成）
                     </div>
-                    
+
                     {/* Brush Size */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ fontSize: 13, color: 'var(--text-secondary)', minWidth: 60 }}>画笔大小</span>
+                    <div className="flex items-center gap-3">
+                        <span className="text-[13px] text-[var(--text-secondary)] min-w-[60px]">画笔大小</span>
                         <input
                             type="range"
                             min="10"
                             max="100"
                             value={brushSize}
                             onChange={(e) => setBrushSize(Number(e.target.value))}
-                            style={{ flex: 1 }}
+                            className="flex-1"
                         />
-                        <span style={{ fontSize: 13, color: 'var(--text-primary)', minWidth: 30 }}>{brushSize}px</span>
+                        <span className="text-[13px] text-[var(--text-primary)] min-w-[30px]">{brushSize}px</span>
                     </div>
 
                     {/* Action Buttons */}
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div className="flex gap-2">
                         <button
                             onClick={() => setShowMask(!showMask)}
-                            style={{
-                                flex: 1,
-                                padding: '8px 12px',
-                                borderRadius: 6,
-                                border: '1px solid var(--border)',
-                                background: 'var(--bg-secondary)',
-                                color: 'var(--text-secondary)',
-                                fontSize: 13,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 6
-                            }}
+                            className="flex-1 py-2 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-[13px] cursor-pointer flex items-center justify-center gap-1.5"
                         >
                             <Icons.Eye />
                             {showMask ? '隐藏遮罩' : '显示遮罩'}
                         </button>
                         <button
                             onClick={clearMask}
-                            style={{
-                                flex: 1,
-                                padding: '8px 12px',
-                                borderRadius: 6,
-                                border: '1px solid var(--border)',
-                                background: 'var(--bg-secondary)',
-                                color: 'var(--text-secondary)',
-                                fontSize: 13,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 6
-                            }}
+                            className="flex-1 py-2 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-[13px] cursor-pointer flex items-center justify-center gap-1.5"
                         >
                             <Icons.Eraser />
                             清除遮罩
@@ -468,9 +415,9 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                             }} />
                         </div>
                         <span style={{ minWidth: 40 }}>{activeRatio.id}</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ transform: isMenuOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', opacity: 0.5 }}>
-                            <path d="M6 9l6 6 6-6" />
-                        </svg>
+                        <div className={`transform transition-transform duration-200 opacity-50 ${isMenuOpen ? 'rotate-180' : ''}`}>
+                            <Icons.ChevronDown />
+                        </div>
                     </button>
                     {isMenuOpen && (
                         <div className="ratio-menu">
@@ -501,16 +448,11 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
 
                 {!originalImage ? (
                     <div
-                        style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            cursor: 'pointer',
-                        }}
+                        className="flex flex-col items-center cursor-pointer"
                         onClick={() => fileInputRef.current?.click()}
                     >
-                        <div style={{ fontSize: 40, marginBottom: 16 }}>🖼️</div>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>上传或拖拽图片到此处</p>
+                        <Icons.Image />
+                        <p className="text-[var(--text-secondary)] text-sm">上传或拖拽图片到此处</p>
                     </div>
                 ) : (
                     <div
@@ -525,22 +467,20 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                     >
                         {/* Hidden actual canvas for composing */}
                         <canvas ref={canvasRef} style={{ display: 'none' }} />
-                        
+
                         {/* Hidden mask canvas */}
                         <canvas ref={maskCanvasRef} style={{ display: 'none' }} />
 
                         {/* Draggable Image Layer */}
                         <div
                             onMouseDown={handleMouseDown}
+                            className={`absolute z-10 ${outpaintMode === 'standard' ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default pointer-events-none'}`}
                             style={{
-                                position: 'absolute',
                                 left: `${imageX * 100}%`,
                                 top: `${imageY * 100}%`,
                                 width: `${(originalImage.width * imageScale / canvasWidth) * 100}%`,
                                 height: `${(originalImage.height * imageScale / canvasHeight) * 100}%`,
-                                cursor: outpaintMode === 'standard' ? (isDragging ? 'grabbing' : 'grab') : 'default',
                                 pointerEvents: outpaintMode === 'standard' ? 'auto' : 'none',
-                                zIndex: 11
                             }}
                         >
                             <img
@@ -559,17 +499,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                                 onMouseMove={handleMaskMouseMove}
                                 onMouseUp={handleMaskMouseUp}
                                 onMouseLeave={handleMaskMouseUp}
-                                style={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    zIndex: 12,
-                                    cursor: `crosshair`,
-                                    opacity: showMask ? 1 : 0.3,
-                                    pointerEvents: 'auto'
-                                }}
+                                className={`absolute top-0 left-0 w-full h-full z-20 cursor-crosshair pointer-events-auto transition-opacity duration-200 ${showMask ? 'opacity-100' : 'opacity-30'}`}
                             />
                         )}
                     </div>
@@ -578,12 +508,12 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
 
             {/* Alignment Toolbar */}
             {originalImage && outpaintMode === 'standard' && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div className="flex flex-col items-center gap-3">
                     <div className="alignment-toolbar">
                         <button className="toolbar-icon-btn" title="左对齐" onClick={() => alignImage('left', 'middle')}><Icons.AlignLeft /></button>
                         <button className="toolbar-icon-btn" title="水平居中" onClick={() => alignImage('center', 'middle')}><Icons.AlignCenter /></button>
                         <button className="toolbar-icon-btn" title="右对齐" onClick={() => alignImage('right', 'middle')}><Icons.AlignRight /></button>
-                        <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+                        <div className="w-[1px] h-5 bg-[var(--border)] mx-1" />
                         <button className="toolbar-icon-btn" title="顶对齐" onClick={() => alignImage('center', 'top')}><Icons.AlignTop /></button>
                         <button className="toolbar-icon-btn" title="垂直居中" onClick={() => alignImage('center', 'middle')}><Icons.AlignMiddle /></button>
                         <button className="toolbar-icon-btn" title="底对齐" onClick={() => alignImage('center', 'bottom')}><Icons.AlignBottom /></button>
@@ -600,15 +530,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                         setCustomMaskData(null);
                         if (fileInputRef.current) fileInputRef.current.value = '';
                     }}
-                    style={{
-                        padding: '6px 12px',
-                        background: 'transparent',
-                        border: '1px solid var(--border)',
-                        borderRadius: 6,
-                        color: 'var(--text-secondary)',
-                        fontSize: 12,
-                        cursor: 'pointer',
-                    }}
+                    className="py-1.5 px-3 bg-transparent border border-[var(--border)] rounded-md text-[var(--text-secondary)] text-xs cursor-pointer"
                 >
                     清除图片
                 </button>
