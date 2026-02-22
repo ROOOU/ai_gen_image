@@ -55,6 +55,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
     const [dragImageStart, setDragImageStart] = useState({ x: 0, y: 0 });
 
     const containerRef = useRef<HTMLDivElement>(null);
+    const selectionBoxRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -195,11 +196,11 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
     };
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
-        if (isDragging && containerRef.current && originalImage) {
-            const containerRect = containerRef.current.getBoundingClientRect();
-            // Calculate movement in canvas space
-            const dx = (e.clientX - dragStart.x) * (canvasWidth / containerRect.width);
-            const dy = (e.clientY - dragStart.y) * (canvasHeight / containerRect.height);
+        if (isDragging && selectionBoxRef.current && originalImage) {
+            const boxRect = selectionBoxRef.current.getBoundingClientRect();
+            // Calculate movement directly relative to the actual selection box drawing the canvas area
+            const dx = (e.clientX - dragStart.x) * (canvasWidth / boxRect.width);
+            const dy = (e.clientY - dragStart.y) * (canvasHeight / boxRect.height);
 
             setImageX(dragImageStart.x + dx / canvasWidth);
             setImageY(dragImageStart.y + dy / canvasHeight);
@@ -275,6 +276,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                     </div>
                 ) : (
                     <div
+                        ref={selectionBoxRef}
                         className="selection-box"
                         style={{
                             aspectRatio: activeRatio.ratio,
