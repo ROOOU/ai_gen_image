@@ -95,19 +95,21 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
 
     const alignImage = (h: 'left' | 'center' | 'right', v: 'top' | 'middle' | 'bottom') => {
         if (!originalImage) return;
-        const imgW = originalImage.width * imageScale;
-        const imgH = originalImage.height * imageScale;
+
+        // Calculate the width/height of the image as a percentage [0-1] of the canvas
+        const imgWPercent = (originalImage.width * imageScale) / canvasWidth;
+        const imgHPercent = (originalImage.height * imageScale) / canvasHeight;
 
         let newX = imageX;
         let newY = imageY;
 
         if (h === 'left') newX = 0;
-        else if (h === 'center') newX = (canvasWidth - imgW) / 2 / canvasWidth;
-        else if (h === 'right') newX = (canvasWidth - imgW) / canvasWidth;
+        else if (h === 'center') newX = (1 - imgWPercent) / 2;
+        else if (h === 'right') newX = 1 - imgWPercent;
 
         if (v === 'top') newY = 0;
-        else if (v === 'middle') newY = (canvasHeight - imgH) / 2 / canvasHeight;
-        else if (v === 'bottom') newY = (canvasHeight - imgH) / canvasHeight;
+        else if (v === 'middle') newY = (1 - imgHPercent) / 2;
+        else if (v === 'bottom') newY = 1 - imgHPercent;
 
         setImageX(newX);
         setImageY(newY);
