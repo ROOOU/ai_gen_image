@@ -1094,7 +1094,6 @@ body {
   border: 1.5px solid var(--accent);
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4);
   z-index: 10;
-  pointer-events: none;
 }
 
 .selection-handle {

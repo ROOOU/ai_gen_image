@@ -294,8 +294,9 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                         {/* Draggable Image Layer */}
                         <div
                             onMouseDown={handleMouseDown}
-                            className={`absolute z-10 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                            className={`z-10 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                             style={{
+                                position: 'absolute',
                                 left: `${imageX * 100}%`,
                                 top: `${imageY * 100}%`,
                                 width: `${(originalImage.width * imageScale / canvasWidth) * 100}%`,
