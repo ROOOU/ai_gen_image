@@ -350,6 +350,23 @@ export default function Home() {
                                 </div>
                             </div>
 
+                            {selectedModel === 'gemini-3-pro-image-preview' && (
+                                <div className="control-section">
+                                    <label className="control-label">分辨率</label>
+                                    <div className="resolution-options">
+                                        {RESOLUTIONS.map(r => (
+                                            <button
+                                                key={r.id}
+                                                className={`resolution-option ${selectedResolution === r.id ? 'active' : ''}`}
+                                                onClick={() => setSelectedResolution(r.id)}
+                                            >
+                                                {r.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {activeMode === 'img2img' && (
                                 <div className="control-section">
                                     <label className="control-label">输入图片</label>

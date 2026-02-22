@@ -77,9 +77,9 @@ export async function POST(request: Request) {
                 generateConfig.imageConfig.aspectRatio = aspectRatio;
             }
 
-            // Pro 模型使用 2K 输出分辨率
-            if (model === 'gemini-3-pro-image-preview') {
-                generateConfig.imageConfig.imageSize = '2K';
+            // Pro 模型使用用户选择的分辨率
+            if (model === 'gemini-3-pro-image-preview' && imageSize) {
+                generateConfig.imageConfig.imageSize = imageSize;
             }
         }
 
