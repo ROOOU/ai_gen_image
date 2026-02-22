@@ -181,6 +181,12 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
 
 
 
+    const handleWheel = useCallback((e: React.WheelEvent) => {
+        if (!originalImage) return;
+        const delta = e.deltaY < 0 ? 0.05 : -0.05;
+        setImageScale(prev => Math.min(Math.max(0.1, prev + delta), 3.0));
+    }, [originalImage]);
+
     const handleMouseDown = (e: React.MouseEvent) => {
         if (!originalImage) return;
         setIsDragging(true);
@@ -217,33 +223,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
 
     return (
         <div className="flex flex-col items-center w-full gap-4">
-            {/* Mode Selection */}
-            {originalImage && (
-                <div className="flex gap-2 p-1 bg-[var(--bg-tertiary)] rounded-lg w-full max-w-[400px]">
-                    <button
-                        onClick={() => setOutpaintMode('standard')}
-                        className={`flex-1 py-2.5 px-4 rounded-md border-none text-sm font-medium cursor-pointer transition-all duration-200 ${outpaintMode === 'standard'
-                            ? 'bg-[var(--accent)] text-black'
-                            : 'bg-transparent text-[var(--text-secondary)]'
-                            }`}
-                    >
-                        标准扩图
-                    </button>
-                    <button
-                        onClick={() => setOutpaintMode('masked')}
-                        className={`flex-1 py-2.5 px-4 rounded-md border-none text-sm font-medium cursor-pointer transition-all duration-200 ${outpaintMode === 'masked'
-                            ? 'bg-[var(--accent)] text-black'
-                            : 'bg-transparent text-[var(--text-secondary)]'
-                            }`}
-                    >
-                        遮罩扩图
-                    </button>
-                </div>
-            )}
-
-
-
-            <div className="editor-canvas-container transparency-grid" ref={containerRef}>
+            <div className="editor-canvas-container transparency-grid" ref={containerRef} onWheel={handleWheel}>
                 {/* Ratio Dropdown */}
                 <div className="ratio-dropdown">
                     <button className="ratio-btn" onClick={() => setIsMenuOpen(!isMenuOpen)}>
@@ -330,33 +310,50 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
             </div>
 
             {/* Alignment Toolbar */}
-            {originalImage && (
-                <div className="flex flex-col items-center gap-3">
-                    <div className="alignment-toolbar">
-                        <button className="toolbar-icon-btn" title="左对齐" onClick={() => alignImage('left', 'middle')}><Icons.AlignLeft /></button>
-                        <button className="toolbar-icon-btn" title="水平居中" onClick={() => alignImage('center', 'middle')}><Icons.AlignCenter /></button>
-                        <button className="toolbar-icon-btn" title="右对齐" onClick={() => alignImage('right', 'middle')}><Icons.AlignRight /></button>
-                        <div className="w-[1px] h-5 bg-[var(--border)] mx-1" />
-                        <button className="toolbar-icon-btn" title="顶对齐" onClick={() => alignImage('center', 'top')}><Icons.AlignTop /></button>
-                        <button className="toolbar-icon-btn" title="垂直居中" onClick={() => alignImage('center', 'middle')}><Icons.AlignMiddle /></button>
-                        <button className="toolbar-icon-btn" title="底对齐" onClick={() => alignImage('center', 'bottom')}><Icons.AlignBottom /></button>
+            {
+                originalImage && (
+                    <div className="flex flex-col items-center gap-3 w-full">
+                        <div className="alignment-toolbar">
+                            <button className="toolbar-icon-btn" title="左对齐" onClick={() => alignImage('left', 'middle')}><Icons.AlignLeft /></button>
+                            <button className="toolbar-icon-btn" title="水平居中" onClick={() => alignImage('center', 'middle')}><Icons.AlignCenter /></button>
+                            <button className="toolbar-icon-btn" title="右对齐" onClick={() => alignImage('right', 'middle')}><Icons.AlignRight /></button>
+                            <div className="w-[1px] h-5 bg-[var(--border)] mx-1" />
+                            <button className="toolbar-icon-btn" title="顶对齐" onClick={() => alignImage('center', 'top')}><Icons.AlignTop /></button>
+                            <button className="toolbar-icon-btn" title="垂直居中" onClick={() => alignImage('center', 'middle')}><Icons.AlignMiddle /></button>
+                            <button className="toolbar-icon-btn" title="底对齐" onClick={() => alignImage('center', 'bottom')}><Icons.AlignBottom /></button>
+                        </div>
+
+                        <div className="flex items-center gap-3 w-full max-w-[400px] mt-2">
+                            <span className="text-xs text-[var(--text-secondary)]">缩放</span>
+                            <input
+                                type="range"
+                                min="10"
+                                max="300"
+                                value={imageScale * 100}
+                                onChange={(e) => setImageScale(Number(e.target.value) / 100)}
+                                className="flex-1 accent-[var(--accent)]"
+                            />
+                            <span className="text-xs text-[var(--text-secondary)] w-12 text-right">{Math.round(imageScale * 100)}%</span>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Clear Image Button */}
-            {originalImage && (
-                <button
-                    onClick={() => {
-                        setOriginalImage(null);
-                        setOriginalDataUrl('');
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                    }}
-                    className="py-1.5 px-3 bg-transparent border border-[var(--border)] rounded-md text-[var(--text-secondary)] text-xs cursor-pointer"
-                >
-                    清除图片
-                </button>
-            )}
+            {
+                originalImage && (
+                    <button
+                        onClick={() => {
+                            setOriginalImage(null);
+                            setOriginalDataUrl('');
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="py-1.5 px-3 bg-transparent border border-[var(--border)] rounded-md text-[var(--text-secondary)] text-xs cursor-pointer"
+                    >
+                        清除图片
+                    </button>
+                )
+            }
 
             <input
                 type="file"
@@ -365,6 +362,6 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                 accept="image/*"
                 onChange={handleFileUpload}
             />
-        </div>
+        </div >
     );
 }

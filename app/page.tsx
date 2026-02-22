@@ -51,10 +51,26 @@ export default function Home() {
     const [generationProgress, setGenerationProgress] = useState(0);
     const [showInspiration, setShowInspiration] = useState(false);
     const [showWelcomeTip, setShowWelcomeTip] = useState(true);
+    const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
 
     useEffect(() => {
         const savedKey = localStorage.getItem('gemini_api_key');
         if (savedKey) setApiKey(savedKey);
+
+        // Check if server has API key configured
+        const checkServerKey = async () => {
+            try {
+                const res = await fetch('/api/gemini');
+                const data = await res.json();
+                if (data.success) {
+                    setIsServerKeyConfigured(true);
+                }
+            } catch (e) {
+                // Ignore error
+            }
+        };
+        checkServerKey();
+
         loadHistory();
 
         const hasSeenTip = localStorage.getItem('has_seen_welcome_tip');
@@ -79,8 +95,8 @@ export default function Home() {
     };
 
     const handleGenerate = async () => {
-        if (!apiKey) {
-            setError('请先配置 API Key');
+        if (!apiKey && !isServerKeyConfigured) {
+            setError('请先配置 API Key（或在服务器环境变量中设置）');
             setActiveTab('settings');
             return;
         }
@@ -259,8 +275,8 @@ export default function Home() {
                 </nav>
 
                 <div className="header-actions">
-                    {apiKey ? (
-                        <span className="api-status connected">
+                    {(apiKey || isServerKeyConfigured) ? (
+                        <span className="api-status connected" title={isServerKeyConfigured && !apiKey ? "使用服务器配置的 API Key" : "使用本地配置的 API Key"}>
                             <span className="status-dot"></span>
                             已连接
                         </span>

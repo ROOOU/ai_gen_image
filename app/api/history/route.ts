@@ -30,8 +30,8 @@ export async function GET(request: Request) {
             }, { status: 500 });
         }
 
-        // 从请求头获取 API Key，生成用户 ID
-        const apiKey = request.headers.get('x-api-key') || '';
+        // 从请求头或环境变量获取 API Key，生成用户 ID
+        const apiKey = request.headers.get('x-api-key') || process.env.GEMINI_API_KEY || '';
         const userId = getUserIdFromApiKey(apiKey);
         console.log('[History API] GET - userId:', userId, 'apiKey length:', apiKey.length);
 
@@ -83,8 +83,8 @@ export async function POST(request: Request) {
             }, { status: 500 });
         }
 
-        // 从请求头获取 API Key，生成用户 ID
-        const apiKey = request.headers.get('x-api-key') || '';
+        // 从请求头或环境变量获取 API Key，生成用户 ID
+        const apiKey = request.headers.get('x-api-key') || process.env.GEMINI_API_KEY || '';
         const userId = getUserIdFromApiKey(apiKey);
         console.log('[History API] POST - userId:', userId);
 
@@ -174,8 +174,8 @@ export async function DELETE(request: Request) {
             }, { status: 500 });
         }
 
-        // 从请求头获取 API Key，生成用户 ID
-        const apiKey = request.headers.get('x-api-key') || '';
+        // 从请求头或环境变量获取 API Key，生成用户 ID
+        const apiKey = request.headers.get('x-api-key') || process.env.GEMINI_API_KEY || '';
         const userId = getUserIdFromApiKey(apiKey);
 
         const { searchParams } = new URL(request.url);

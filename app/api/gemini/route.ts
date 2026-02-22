@@ -19,8 +19,8 @@ import { GoogleGenAI } from '@google/genai';
  */
 export async function POST(request: Request) {
     try {
-        // 从请求头获取 API Key
-        const apiKey = request.headers.get('x-api-key');
+        // 从请求头或环境变量获取 API Key
+        const apiKey = request.headers.get('x-api-key') || process.env.GEMINI_API_KEY;
 
         if (!apiKey) {
             return NextResponse.json(
@@ -90,10 +90,10 @@ export async function POST(request: Request) {
             // 扩图模式：使用特殊的 prompt 结构和图像顺序
             // 第一张图：composite（画布+原图）
             // 第二张图：mask（黑色=保留，白色=生成）
-            
+
             const compositeBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
             const maskBase64 = images[1].data.replace(/^data:[^;]+;base64,/, '');
-            
+
             // 构建扩图专用内容
             contents = [
                 // 先发送 mask 作为参考（白色区域是要生成的）
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
                     text: `${prompt}. Expand this image to fill the canvas, seamlessly extending the content. Match the original style, lighting, and perspective. The white areas in the mask indicate where new content should be generated.`,
                 },
             ];
-            
+
             console.log('[Gemini API] Outpainting mode:', {
                 model,
                 promptLength: prompt.length,
@@ -214,7 +214,7 @@ export async function POST(request: Request) {
  */
 export async function GET(request: Request) {
     try {
-        const apiKey = request.headers.get('x-api-key');
+        const apiKey = request.headers.get('x-api-key') || process.env.GEMINI_API_KEY;
 
         if (!apiKey) {
             return NextResponse.json(
