@@ -85,11 +85,12 @@ export async function POST(request: Request) {
         let contents: any;
 
         if (mode === 'outpaint' && hasInputImages) {
-            // 扩图模式：发送合成图 + 遮罩图
-            // images[0] = 合成图（原图放在灰色画布上）
-            // images[1] = 遮罩图（白色=需要生成，黑色=保持原图）
+            // 扩图模式：发送原图 + 描述性提示词
+            // Gemini 使用 aspectRatio 配置来决定输出尺寸，
+            // 并根据提示词自然延展图片内容
 
-            const compositeBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
+            // images[0] = 原始图片
+            const originalBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
 
             contents = [
                 {
@@ -98,27 +99,15 @@ export async function POST(request: Request) {
                 {
                     inlineData: {
                         mimeType: images[0].mimeType || 'image/jpeg',
-                        data: compositeBase64,
+                        data: originalBase64,
                     },
                 },
             ];
 
-            // 如果有遮罩图，也发送给 Gemini
-            if (images[1]) {
-                const maskBase64 = images[1].data.replace(/^data:[^;]+;base64,/, '');
-                contents.push({
-                    inlineData: {
-                        mimeType: images[1].mimeType || 'image/png',
-                        data: maskBase64,
-                    },
-                });
-            }
-
             console.log('[Gemini API] Outpainting mode:', {
                 model,
                 promptLength: prompt.length,
-                compositeImageSize: compositeBase64.length,
-                hasMask: !!images[1],
+                originalImageSize: originalBase64.length,
                 aspectRatio,
             });
         } else if (hasInputImages) {

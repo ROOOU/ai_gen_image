@@ -49,50 +49,6 @@ function compressImage(dataUrl: string, maxDimension = 1024, quality = 0.8): Pro
     });
 }
 
-/**
- * 后合成：将原始图片粘贴回 AI 生成结果的原始位置
- * 保证原图区域像素级别完全不变
- */
-function recomposite(
-    aiResultDataUrl: string,
-    originalDataUrl: string,
-    canvasWidth: number,
-    canvasHeight: number,
-    imageX: number,
-    imageY: number,
-    originalWidth: number,
-    originalHeight: number,
-    scale: number
-): Promise<string> {
-    return new Promise((resolve) => {
-        const aiImg = new Image();
-        aiImg.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            const ctx = canvas.getContext('2d')!;
-
-            // 1. 绘制 AI 生成的完整扩展图（缩放到画布大小）
-            ctx.drawImage(aiImg, 0, 0, canvasWidth, canvasHeight);
-
-            // 2. 将原始图片覆盖回原始位置（像素级保真）
-            const origImg = new Image();
-            origImg.onload = () => {
-                const drawX = imageX * canvasWidth;
-                const drawY = imageY * canvasHeight;
-                const drawW = originalWidth * scale;
-                const drawH = originalHeight * scale;
-                ctx.drawImage(origImg, drawX, drawY, drawW, drawH);
-                resolve(canvas.toDataURL('image/png'));
-            };
-            origImg.onerror = () => resolve(aiResultDataUrl);
-            origImg.src = originalDataUrl;
-        };
-        aiImg.onerror = () => resolve(aiResultDataUrl);
-        aiImg.src = aiResultDataUrl;
-    });
-}
-
 const MODELS = [
     { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: '快速高效' },
     { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: '专业品质' },
@@ -191,7 +147,7 @@ export default function Home() {
         }
 
         const finalPrompt = activeMode === 'outpaint'
-            ? (prompt.trim() || 'The first image shows a photo placed on a gray canvas. The second image is a mask where white areas need to be filled with new content and black areas must be preserved exactly as they are. Please generate new content ONLY in the white masked areas that naturally extends and continues the scene from the original photo. Match the style, lighting, colors, perspective, and atmosphere perfectly. Do NOT modify the black masked area at all.')
+            ? (prompt.trim() || `Expand the canvas of this image to ${selectedRatio || '16:9'} aspect ratio. Keep the original content and its position completely unchanged. Naturally extend the background, environment, and scene beyond the original borders. Match the style, lighting, colors, and atmosphere seamlessly.`)
             : prompt.trim();
 
         if (activeMode !== 'outpaint' && !finalPrompt) {
@@ -226,13 +182,10 @@ export default function Home() {
 
             if (activeMode === 'outpaint' && outpaintData) {
                 body.mode = 'outpaint';
-                // 发送合成图（原图放在画布上）+ 遮罩图（白色=需要生成，黑色=保持原图）
-                // 压缩以避免超出 Vercel body 大小限制
-                const compressedComposite = await compressImage(outpaintData.compositeImage, 1024, 0.85);
-                const compressedMask = await compressImage(outpaintData.maskImage, 1024, 0.9);
+                // 压缩原始图片以避免超出 Vercel body 大小限制
+                const compressedImage = await compressImage(outpaintData.originalImage, 1024, 0.8);
                 body.images = [
-                    { data: compressedComposite, mimeType: 'image/jpeg' },
-                    { data: compressedMask, mimeType: 'image/png' },
+                    { data: compressedImage, mimeType: 'image/jpeg' },
                 ];
             } else if (activeMode === 'img2img' && referenceImage?.data) {
                 body.mode = 'img2img';
@@ -254,24 +207,7 @@ export default function Home() {
             setGenerationProgress(100);
 
             if (data.success) {
-                let finalImage = data.images[0].data;
-
-                // 扩图模式：后合成 - 将原图粘贴回原始位置，保证像素级不变
-                if (activeMode === 'outpaint' && outpaintData) {
-                    finalImage = await recomposite(
-                        data.images[0].data,
-                        outpaintData.originalImage,
-                        outpaintData.width,
-                        outpaintData.height,
-                        outpaintData.originalX,
-                        outpaintData.originalY,
-                        outpaintData.originalWidth,
-                        outpaintData.originalHeight,
-                        outpaintData.scale
-                    );
-                }
-
-                setResultImage(finalImage);
+                setResultImage(data.images[0].data);
                 if (activeMode === 'outpaint') setOutpaintView('result');
                 const thumbnailData = await generateThumbnail(data.images[0].data);
                 try {
