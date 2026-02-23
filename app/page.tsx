@@ -49,6 +49,50 @@ function compressImage(dataUrl: string, maxDimension = 1024, quality = 0.8): Pro
     });
 }
 
+/**
+ * 后合成：将原始图片粘贴回 AI 生成结果的原始位置
+ * 保证原图区域像素级别完全不变
+ */
+function recomposite(
+    aiResultDataUrl: string,
+    originalDataUrl: string,
+    canvasWidth: number,
+    canvasHeight: number,
+    imageX: number,
+    imageY: number,
+    originalWidth: number,
+    originalHeight: number,
+    scale: number
+): Promise<string> {
+    return new Promise((resolve) => {
+        const aiImg = new Image();
+        aiImg.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            const ctx = canvas.getContext('2d')!;
+
+            // 1. 绘制 AI 生成的完整扩展图（缩放到画布大小）
+            ctx.drawImage(aiImg, 0, 0, canvasWidth, canvasHeight);
+
+            // 2. 将原始图片覆盖回原始位置（像素级保真）
+            const origImg = new Image();
+            origImg.onload = () => {
+                const drawX = imageX * canvasWidth;
+                const drawY = imageY * canvasHeight;
+                const drawW = originalWidth * scale;
+                const drawH = originalHeight * scale;
+                ctx.drawImage(origImg, drawX, drawY, drawW, drawH);
+                resolve(canvas.toDataURL('image/png'));
+            };
+            origImg.onerror = () => resolve(aiResultDataUrl);
+            origImg.src = originalDataUrl;
+        };
+        aiImg.onerror = () => resolve(aiResultDataUrl);
+        aiImg.src = aiResultDataUrl;
+    });
+}
+
 const MODELS = [
     { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: '快速高效' },
     { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: '专业品质' },
@@ -210,7 +254,24 @@ export default function Home() {
             setGenerationProgress(100);
 
             if (data.success) {
-                setResultImage(data.images[0].data);
+                let finalImage = data.images[0].data;
+
+                // 扩图模式：后合成 - 将原图粘贴回原始位置，保证像素级不变
+                if (activeMode === 'outpaint' && outpaintData) {
+                    finalImage = await recomposite(
+                        data.images[0].data,
+                        outpaintData.originalImage,
+                        outpaintData.width,
+                        outpaintData.height,
+                        outpaintData.originalX,
+                        outpaintData.originalY,
+                        outpaintData.originalWidth,
+                        outpaintData.originalHeight,
+                        outpaintData.scale
+                    );
+                }
+
+                setResultImage(finalImage);
                 if (activeMode === 'outpaint') setOutpaintView('result');
                 const thumbnailData = await generateThumbnail(data.images[0].data);
                 try {
