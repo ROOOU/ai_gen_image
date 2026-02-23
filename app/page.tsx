@@ -186,17 +186,21 @@ export default function Home() {
                 setResultImage(data.images[0].data);
                 if (activeMode === 'outpaint') setOutpaintView('result');
                 const thumbnailData = await generateThumbnail(data.images[0].data);
-                await fetch('/api/history', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-                    body: JSON.stringify({
-                        imageData: data.images[0].data,
-                        thumbnailData,
-                        prompt: body.prompt,
-                        mode: activeMode,
-                        model: selectedModel,
-                    }),
-                });
+                try {
+                    await fetch('/api/history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                        body: JSON.stringify({
+                            imageData: data.images[0].data,
+                            thumbnailData,
+                            prompt: body.prompt,
+                            mode: activeMode,
+                            model: selectedModel,
+                        }),
+                    });
+                } catch (e) {
+                    console.warn('History save failed:', e);
+                }
                 loadHistory();
             } else {
                 setError(data.error || '生成失败');

@@ -72,15 +72,13 @@ export async function POST(request: Request) {
             // 图生图/扩图模式
             generateConfig.imageConfig = {};
 
-            // 如果指定了比例（非 auto），则应用
+            // 如果指定了比例，则应用
             if (aspectRatio) {
                 generateConfig.imageConfig.aspectRatio = aspectRatio;
             }
 
-            // Pro 模型使用用户选择的分辨率
-            if (model === 'gemini-3-pro-image-preview' && imageSize) {
-                generateConfig.imageConfig.imageSize = imageSize;
-            }
+            // 注意: imageSize 仅在纯文生图模式使用
+            // 图生图/扩图模式下 Gemini API 不支持 imageSize 参数
         }
 
         // 构建内容
