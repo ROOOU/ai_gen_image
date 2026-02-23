@@ -125,7 +125,7 @@ export default function Home() {
         }
 
         const finalPrompt = activeMode === 'outpaint'
-            ? (prompt.trim() || 'Extend the image naturally, maintain consistent style and lighting, seamless blending with the original content')
+            ? (prompt.trim() || 'Outpaint and extend this image to fill the target aspect ratio. Seamlessly expand the canvas by generating new content around the edges that naturally continues the scene. Preserve the original image content exactly as-is, and match the style, lighting, colors, perspective, and atmosphere perfectly.')
             : prompt.trim();
 
         if (activeMode !== 'outpaint' && !finalPrompt) {
@@ -161,8 +161,7 @@ export default function Home() {
             if (activeMode === 'outpaint' && outpaintData) {
                 body.mode = 'outpaint';
                 body.images = [
-                    { data: outpaintData.compositeImage, mimeType: 'image/jpeg' },
-                    { data: outpaintData.maskImage, mimeType: 'image/png' },
+                    { data: outpaintData.originalImage, mimeType: 'image/jpeg' },
                 ];
             } else if (activeMode === 'img2img' && referenceImage?.data) {
                 body.mode = 'img2img';

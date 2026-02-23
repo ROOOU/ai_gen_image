@@ -86,41 +86,30 @@ export async function POST(request: Request) {
         // 构建内容
         let contents: any;
 
-        if (mode === 'outpaint' && hasInputImages && images.length >= 2) {
-            // 扩图模式：使用特殊的 prompt 结构和图像顺序
-            // 第一张图：composite（画布+原图）
-            // 第二张图：mask（黑色=保留，白色=生成）
+        if (mode === 'outpaint' && hasInputImages) {
+            // 扩图模式：发送原图 + 描述性提示词
+            // Gemini 使用 aspectRatio 配置来决定输出尺寸，
+            // 并根据提示词自然延展图片内容
 
-            const compositeBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
-            const maskBase64 = images[1].data.replace(/^data:[^;]+;base64,/, '');
+            // images[0] = 原始图片
+            const originalBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
 
-            // 构建扩图专用内容
             contents = [
-                // 先发送 mask 作为参考（白色区域是要生成的）
+                {
+                    text: prompt,
+                },
                 {
                     inlineData: {
-                        mimeType: 'image/png',
-                        data: maskBase64,
+                        mimeType: images[0].mimeType || 'image/jpeg',
+                        data: originalBase64,
                     },
-                },
-                // 再发送 composite（包含原图的画布）
-                {
-                    inlineData: {
-                        mimeType: 'image/jpeg',
-                        data: compositeBase64,
-                    },
-                },
-                // 最后发送提示词
-                {
-                    text: `${prompt}. Expand this image to fill the canvas, seamlessly extending the content. Match the original style, lighting, and perspective. The white areas in the mask indicate where new content should be generated.`,
                 },
             ];
 
             console.log('[Gemini API] Outpainting mode:', {
                 model,
                 promptLength: prompt.length,
-                compositeSize: compositeBase64.length,
-                maskSize: maskBase64.length,
+                originalImageSize: originalBase64.length,
                 aspectRatio,
             });
         } else if (hasInputImages) {
