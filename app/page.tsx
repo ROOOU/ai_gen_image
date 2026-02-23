@@ -74,6 +74,7 @@ export default function Home() {
     const [showInspiration, setShowInspiration] = useState(false);
     const [showWelcomeTip, setShowWelcomeTip] = useState(true);
     const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
+    const [outpaintView, setOutpaintView] = useState<'editor' | 'result'>('editor');
 
     useEffect(() => {
         const savedKey = localStorage.getItem('gemini_api_key');
@@ -133,6 +134,7 @@ export default function Home() {
         }
 
         setIsGenerating(true);
+        if (activeMode === 'outpaint') setOutpaintView('result');
         setError(null);
         setGenerationProgress(0);
         setShowWelcomeTip(false);
@@ -183,6 +185,7 @@ export default function Home() {
 
             if (data.success) {
                 setResultImage(data.images[0].data);
+                if (activeMode === 'outpaint') setOutpaintView('result');
                 const thumbnailData = await generateThumbnail(data.images[0].data);
                 await fetch('/api/history', {
                     method: 'POST',
@@ -430,15 +433,16 @@ export default function Home() {
                         </aside>
 
                         <div className="main-content">
-                            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, gap: 12 }}>
-                                <div className="alignment-toolbar" style={{ margin: 0, padding: '4px 12px' }}>
-                                    <button className={`nav-tab active`}>扩绘编辑器</button>
-                                    <button className={`nav-tab`}>结果</button>
-                                    <button className={`nav-tab`}>代码</button>
+                            {activeMode === 'outpaint' && (
+                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, gap: 12 }}>
+                                    <div className="alignment-toolbar" style={{ margin: 0, padding: '4px 12px' }}>
+                                        <button className={`nav-tab ${outpaintView === 'editor' ? 'active' : ''}`} onClick={() => setOutpaintView('editor')}>扩绘编辑器</button>
+                                        <button className={`nav-tab ${outpaintView === 'result' ? 'active' : ''}`} onClick={() => setOutpaintView('result')}>结果{resultImage ? ' ✓' : ''}</button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
-                            {activeMode === 'outpaint' ? (
+                            {activeMode === 'outpaint' && outpaintView === 'editor' ? (
                                 <OutpaintEditor
                                     onCompositeReady={setOutpaintData}
                                     aspectRatio={selectedRatio}
