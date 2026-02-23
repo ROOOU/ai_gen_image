@@ -43,7 +43,7 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         if (!confirm('确定要删除这条记录吗？')) return;
-        
+
         setDeletingId(id);
         try {
             const res = await fetch(`/api/history?id=${id}`, {
@@ -110,11 +110,22 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                     <div className="history-list-grid">
                         {history.map(item => (
                             <div key={item.id} className="history-thumb-card" onClick={() => setSelectedItem(item)}>
-                                <img src={item.thumbnailUrl || item.imageUrl} alt={item.prompt} loading="lazy" />
+                                <img
+                                    src={item.thumbnailUrl || item.imageUrl}
+                                    alt={item.prompt}
+                                    loading="lazy"
+                                    onError={(e) => {
+                                        const target = e.currentTarget;
+                                        // If thumbnail failed, try full image; if that also fails, hide
+                                        if (item.thumbnailUrl && target.src !== item.imageUrl) {
+                                            target.src = item.imageUrl;
+                                        }
+                                    }}
+                                />
                                 <div className="history-thumb-overlay">
                                     <p className="history-thumb-prompt">{item.prompt}</p>
                                 </div>
-                                <button 
+                                <button
                                     className="history-delete-btn"
                                     onClick={(e) => handleDelete(e, item.id)}
                                     disabled={deletingId === item.id}
@@ -132,11 +143,11 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                     <div className="history-modal-overlay" onClick={() => setSelectedItem(null)}>
                         <div className="history-modal" onClick={e => e.stopPropagation()}>
                             <button className="modal-close" onClick={() => setSelectedItem(null)}>✕</button>
-                            
+
                             <div className="modal-image-container">
                                 <img src={selectedItem.imageUrl} alt={selectedItem.prompt} />
                             </div>
-                            
+
                             <div className="modal-info">
                                 <div className="modal-meta">
                                     <span className="modal-mode">{getModeLabel(selectedItem.mode)}</span>
@@ -144,12 +155,12 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                                         {new Date(selectedItem.timestamp).toLocaleString('zh-CN')}
                                     </span>
                                 </div>
-                                
+
                                 <div className="modal-prompt-section">
                                     <label>提示词</label>
                                     <p className="modal-prompt">{selectedItem.prompt}</p>
                                 </div>
-                                
+
                                 <div className="modal-actions">
                                     <button className="modal-btn primary" onClick={() => handleApply(selectedItem)}>
                                         应用此图片
