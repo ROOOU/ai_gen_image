@@ -1,7 +1,13 @@
 {
     "functions": {
-        "app/api/generate/route.ts": {
+        "app/api/gemini/route.ts": {
             "maxDuration": 60
+        },
+        "app/api/history/route.ts": {
+            "maxDuration": 30
+        },
+        "app/api/history/image/route.ts": {
+            "maxDuration": 15
         }
     }
 }
