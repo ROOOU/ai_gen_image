@@ -27,6 +27,28 @@ function generateThumbnail(dataUrl: string, maxSize = 200): Promise<string> {
     });
 }
 
+/**
+ * 压缩图片以避免超出 Vercel body 大小限制 (4.5MB)
+ */
+function compressImage(dataUrl: string, maxDimension = 1024, quality = 0.8): Promise<string> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const scale = Math.min(maxDimension / img.width, maxDimension / img.height, 1);
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d')!;
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
+}
+
 const MODELS = [
     { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: '快速高效' },
     { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: '专业品质' },
@@ -160,8 +182,10 @@ export default function Home() {
 
             if (activeMode === 'outpaint' && outpaintData) {
                 body.mode = 'outpaint';
+                // 压缩图片以避免超出 Vercel body 大小限制
+                const compressedImage = await compressImage(outpaintData.originalImage, 1024, 0.8);
                 body.images = [
-                    { data: outpaintData.originalImage, mimeType: 'image/jpeg' },
+                    { data: compressedImage, mimeType: 'image/jpeg' },
                 ];
             } else if (activeMode === 'img2img' && referenceImage?.data) {
                 body.mode = 'img2img';
