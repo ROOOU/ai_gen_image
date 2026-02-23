@@ -147,7 +147,7 @@ export default function Home() {
         }
 
         const finalPrompt = activeMode === 'outpaint'
-            ? (prompt.trim() || 'Outpaint and extend this image to fill the target aspect ratio. Seamlessly expand the canvas by generating new content around the edges that naturally continues the scene. Preserve the original image content exactly as-is, and match the style, lighting, colors, perspective, and atmosphere perfectly.')
+            ? (prompt.trim() || 'The first image shows a photo placed on a gray canvas. The second image is a mask where white areas need to be filled with new content and black areas must be preserved exactly as they are. Please generate new content ONLY in the white masked areas that naturally extends and continues the scene from the original photo. Match the style, lighting, colors, perspective, and atmosphere perfectly. Do NOT modify the black masked area at all.')
             : prompt.trim();
 
         if (activeMode !== 'outpaint' && !finalPrompt) {
@@ -182,10 +182,13 @@ export default function Home() {
 
             if (activeMode === 'outpaint' && outpaintData) {
                 body.mode = 'outpaint';
-                // 压缩图片以避免超出 Vercel body 大小限制
-                const compressedImage = await compressImage(outpaintData.originalImage, 1024, 0.8);
+                // 发送合成图（原图放在画布上）+ 遮罩图（白色=需要生成，黑色=保持原图）
+                // 压缩以避免超出 Vercel body 大小限制
+                const compressedComposite = await compressImage(outpaintData.compositeImage, 1024, 0.85);
+                const compressedMask = await compressImage(outpaintData.maskImage, 1024, 0.9);
                 body.images = [
-                    { data: compressedImage, mimeType: 'image/jpeg' },
+                    { data: compressedComposite, mimeType: 'image/jpeg' },
+                    { data: compressedMask, mimeType: 'image/png' },
                 ];
             } else if (activeMode === 'img2img' && referenceImage?.data) {
                 body.mode = 'img2img';
