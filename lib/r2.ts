@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { createHash } from 'crypto';
 
 function isNamedError(error: unknown): error is { name: string } {
@@ -31,6 +31,13 @@ export interface HistoryItem {
     model: string;
     imageKey: string;      // R2 中的图片 key
     aspectRatio?: string;
+    inputImageKey?: string;
+    inputImageHash?: string;
+}
+
+interface ParsedImageData {
+    buffer: Buffer;
+    mimeType: string;
 }
 
 /**
@@ -65,6 +72,59 @@ function getThumbnailKey(userId: string, imageId: string): string {
 }
 
 /**
+ * 获取用户输入图（图生图/扩图参考图）的存储路径
+ */
+function getInputImageKey(userId: string, imageHash: string, ext: string): string {
+    return `inputs/${userId}/${imageHash}.${ext}`;
+}
+
+function getThumbnailKeyFromImageKey(imageKey: string): string {
+    return imageKey.replace(/\.jpg$/i, '_thumb.jpg');
+}
+
+function parseImageData(imageData: string, fallbackMimeType = 'image/jpeg'): ParsedImageData {
+    const mimeMatch = imageData.match(/^data:([^;]+);base64,/i);
+    const mimeType = mimeMatch?.[1] || fallbackMimeType;
+    const base64Data = imageData.replace(/^data:[^;]+;base64,/, '');
+
+    return {
+        buffer: Buffer.from(base64Data, 'base64'),
+        mimeType,
+    };
+}
+
+function getExtensionFromMimeType(mimeType: string): string {
+    switch (mimeType.toLowerCase()) {
+        case 'image/png':
+            return 'png';
+        case 'image/webp':
+            return 'webp';
+        case 'image/gif':
+            return 'gif';
+        case 'image/jpeg':
+        case 'image/jpg':
+        default:
+            return 'jpg';
+    }
+}
+
+async function doesObjectExist(key: string): Promise<boolean> {
+    try {
+        await s3Client.send(new HeadObjectCommand({
+            Bucket: R2_BUCKET_NAME,
+            Key: key,
+        }));
+        return true;
+    } catch (error: unknown) {
+        if (isNamedError(error) && error.name === 'NotFound') {
+            return false;
+        }
+        // Head 失败时不阻断主流程，按不存在处理并继续上传
+        return false;
+    }
+}
+
+/**
  * 检查 R2 是否已配置
  */
 export function isR2Configured(): boolean {
@@ -80,9 +140,7 @@ export async function uploadImage(
     userId: string,
     mimeType: string = 'image/jpeg'
 ): Promise<string> {
-    // 从 base64 data URL 提取数据
-    const base64Data = imageData.replace(/^data:[^;]+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
+    const { buffer } = parseImageData(imageData, mimeType);
 
     const key = getImageKey(userId, imageId);
 
@@ -104,8 +162,7 @@ export async function uploadThumbnail(
     imageId: string,
     userId: string
 ): Promise<string> {
-    const base64Data = thumbnailData.replace(/^data:[^;]+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
+    const { buffer } = parseImageData(thumbnailData, 'image/jpeg');
 
     const key = getThumbnailKey(userId, imageId);
 
@@ -247,8 +304,17 @@ export async function deleteHistoryItem(userId: string, id: string): Promise<boo
         const item = history.find(h => h.id === id);
 
         if (item) {
-            // 删除图片
+            // 删除生成结果图和缩略图
             await deleteImage(item.imageKey);
+            await deleteImage(getThumbnailKeyFromImageKey(item.imageKey));
+
+            // 输入参考图可能被多条记录复用，仅在没有其他引用时删除
+            if (item.inputImageKey) {
+                const stillReferenced = history.some(h => h.id !== id && h.inputImageKey === item.inputImageKey);
+                if (!stillReferenced) {
+                    await deleteImage(item.inputImageKey);
+                }
+            }
 
             // 从历史中移除
             const newHistory = history.filter(h => h.id !== id);
@@ -259,4 +325,34 @@ export async function deleteHistoryItem(userId: string, id: string): Promise<boo
         console.error('Error deleting history item:', error);
         return false;
     }
+}
+
+/**
+ * 上传输入参考图（按图片 hash 去重）
+ */
+export async function uploadInputImageWithDedup(
+    imageData: string,
+    userId: string,
+    fallbackMimeType: string = 'image/jpeg'
+): Promise<{ imageKey: string; imageHash: string; reused: boolean }> {
+    const { buffer, mimeType } = parseImageData(imageData, fallbackMimeType);
+    const imageHash = createHash('sha256').update(buffer).digest('hex');
+    const ext = getExtensionFromMimeType(mimeType);
+    const imageKey = getInputImageKey(userId, imageHash, ext);
+
+    const exists = await doesObjectExist(imageKey);
+    if (!exists) {
+        await s3Client.send(new PutObjectCommand({
+            Bucket: R2_BUCKET_NAME,
+            Key: imageKey,
+            Body: buffer,
+            ContentType: mimeType,
+        }));
+    }
+
+    return {
+        imageKey,
+        imageHash,
+        reused: exists,
+    };
 }

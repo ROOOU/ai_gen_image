@@ -62,6 +62,14 @@ const RESOLUTIONS = [
     { id: '4K', name: '4K' },
 ];
 
+const ASPECT_RATIOS = [
+    { id: '1:1', name: '1:1' },
+    { id: '3:4', name: '3:4' },
+    { id: '4:3', name: '4:3' },
+    { id: '9:16', name: '9:16' },
+    { id: '16:9', name: '16:9' },
+];
+
 interface HistoryItem {
     id: string;
     timestamp: number;
@@ -70,6 +78,7 @@ interface HistoryItem {
     model: string;
     imageUrl: string;
     thumbnailUrl?: string;
+    inputImageUrl?: string;
 }
 
 interface PreviewDetailItem {
@@ -78,6 +87,7 @@ interface PreviewDetailItem {
     mode: 'text2img' | 'img2img' | 'outpaint';
     model: string;
     timestamp: number;
+    inputImageUrl?: string;
 }
 
 interface OutpaintData {
@@ -264,6 +274,13 @@ export default function Home() {
                         historyHeaders['x-api-key'] = apiKey;
                     }
 
+                    const historyInputImageData = activeMode === 'img2img'
+                        ? referenceImage?.data
+                        : (activeMode === 'outpaint' ? outpaintData?.originalImage : undefined);
+                    const historyInputImageMimeType = activeMode === 'img2img'
+                        ? referenceImage?.mimeType
+                        : 'image/jpeg';
+
                     await fetch('/api/history', {
                         method: 'POST',
                         headers: historyHeaders,
@@ -273,6 +290,8 @@ export default function Home() {
                             prompt: body.prompt,
                             mode: activeMode,
                             model: selectedModel,
+                            inputImageData: historyInputImageData,
+                            inputImageMimeType: historyInputImageMimeType,
                         }),
                     });
                 } catch (e) {
@@ -552,6 +571,23 @@ export default function Home() {
                                 </div>
                             </div>
 
+                            {activeMode !== 'outpaint' && (
+                                <div className="control-section">
+                                    <label className="control-label">图片比例</label>
+                                    <div className="ratio-options">
+                                        {ASPECT_RATIOS.map((ratio) => (
+                                            <button
+                                                key={ratio.id}
+                                                className={`ratio-option ${selectedRatio === ratio.id ? 'active' : ''}`}
+                                                onClick={() => setSelectedRatio(ratio.id)}
+                                            >
+                                                {ratio.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {selectedModel === 'gemini-3-pro-image-preview' && (
                                 <div className="control-section">
                                     <label className="control-label">分辨率</label>
@@ -705,11 +741,19 @@ export default function Home() {
                                                             mode: item.mode,
                                                             model: item.model,
                                                             timestamp: item.timestamp,
+                                                            inputImageUrl: item.inputImageUrl,
                                                         });
                                                     }}
                                                 >
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img src={item.thumbnailUrl || item.imageUrl} alt="" loading="lazy" />
+                                                    {item.inputImageUrl && (
+                                                        <div className="history-input-preview" title="此记录包含参考图">
+                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                            <img src={item.inputImageUrl} alt="reference" loading="lazy" />
+                                                            <span>参考图</span>
+                                                        </div>
+                                                    )}
                                                     <div className="history-overlay">
                                                         <span className="history-mode">{getModeLabel(item.mode)}</span>
                                                         <p className="history-prompt">{item.prompt}</p>
@@ -796,6 +840,24 @@ export default function Home() {
                                 <span>{new Date(previewDetailItem.timestamp).toLocaleString('zh-CN')}</span>
                             </div>
                             <p className="preview-detail-prompt">{previewDetailItem.prompt}</p>
+                            {previewDetailItem.inputImageUrl && (
+                                <div style={{ display: 'grid', gap: 8 }}>
+                                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>参考图</p>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={previewDetailItem.inputImageUrl}
+                                        alt="input reference"
+                                        style={{
+                                            width: '100%',
+                                            maxHeight: 200,
+                                            objectFit: 'contain',
+                                            borderRadius: 8,
+                                            border: '1px solid var(--border-color)',
+                                            background: 'var(--bg-tertiary)',
+                                        }}
+                                    />
+                                </div>
+                            )}
                             <div className="preview-detail-actions">
                                 <button className="toolbar-btn primary" onClick={applyPreviewDetail}>应用到创作</button>
                                 <button className="toolbar-btn" onClick={() => setPreviewDetailItem(null)}>关闭</button>

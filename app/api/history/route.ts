@@ -9,12 +9,15 @@ import {
     getImageUrl,
     getThumbnailUrl,
     getUserIdFromApiKey,
+    uploadInputImageWithDedup,
     HistoryItem,
 } from '@/lib/r2';
 
 interface CreateHistoryRequestBody {
     imageData?: string;
     thumbnailData?: string;
+    inputImageData?: string;
+    inputImageMimeType?: string;
     prompt?: string;
     mode?: 'text2img' | 'img2img' | 'outpaint';
     model?: string;
@@ -59,6 +62,7 @@ export async function GET(request: Request) {
             ...item,
             imageUrl: getImageUrl(item.imageKey),
             thumbnailUrl: getThumbnailUrl(item.imageKey),
+            inputImageUrl: item.inputImageKey ? getImageUrl(item.inputImageKey) : undefined,
         }));
 
         return NextResponse.json({
@@ -105,7 +109,16 @@ export async function POST(request: Request) {
         console.log('[History API] POST - userId:', userId);
 
         const body = await request.json() as CreateHistoryRequestBody;
-        const { imageData, thumbnailData, prompt, mode, model, aspectRatio } = body;
+        const {
+            imageData,
+            thumbnailData,
+            inputImageData,
+            inputImageMimeType,
+            prompt,
+            mode,
+            model,
+            aspectRatio,
+        } = body;
         console.log('[History API] POST - prompt:', prompt, 'mode:', mode, 'model:', model);
 
         if (!imageData || !prompt) {
@@ -135,6 +148,24 @@ export async function POST(request: Request) {
             }
         }
 
+        // 图生图/扩图输入图按内容哈希去重存储
+        let inputImageKey: string | undefined;
+        let inputImageHash: string | undefined;
+        if (inputImageData && (mode === 'img2img' || mode === 'outpaint')) {
+            try {
+                const dedupResult = await uploadInputImageWithDedup(inputImageData, userId, inputImageMimeType || 'image/jpeg');
+                inputImageKey = dedupResult.imageKey;
+                inputImageHash = dedupResult.imageHash;
+                console.log('[History API] POST - Input image stored:', {
+                    reused: dedupResult.reused,
+                    imageHash: dedupResult.imageHash,
+                });
+            } catch (err) {
+                console.error('[History API] POST - Input image store failed:', err);
+                // 输入图存储失败不影响主流程
+            }
+        }
+
         // 创建历史记录项
         const historyItem: HistoryItem = {
             id,
@@ -144,6 +175,8 @@ export async function POST(request: Request) {
             model: model || 'unknown',
             imageKey,
             aspectRatio,
+            inputImageKey,
+            inputImageHash,
         };
 
         // 保存到用户的历史记录
@@ -157,6 +190,7 @@ export async function POST(request: Request) {
                 item: {
                     ...historyItem,
                     imageUrl: getImageUrl(imageKey),
+                    inputImageUrl: inputImageKey ? getImageUrl(inputImageKey) : undefined,
                 },
             });
         } else {
