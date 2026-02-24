@@ -546,14 +546,15 @@ export default function Home() {
                                 )}
                             </div>
 
-                            <button
-                                className="generate-button"
-                                disabled={isGenerating || (activeMode !== 'outpaint' && !prompt.trim())}
-                                onClick={handleGenerate}
-                                style={{ marginTop: 'auto' }}
-                            >
-                                {isGenerating ? <><span className="btn-spinner"></span> 运行中</> : <>运行</>}
-                            </button>
+                            <div className="generate-action-bar">
+                                <button
+                                    className="generate-button"
+                                    disabled={isGenerating || (activeMode !== 'outpaint' && !prompt.trim())}
+                                    onClick={handleGenerate}
+                                >
+                                    {isGenerating ? <><span className="btn-spinner"></span> 运行中</> : <>运行</>}
+                                </button>
+                            </div>
 
                             {error && <div className="error-alert">{error}</div>}
                         </aside>
