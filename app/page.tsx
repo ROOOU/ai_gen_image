@@ -519,204 +519,204 @@ export default function Home() {
                         </div>
 
                         <div className={`generate-layout ${activeMode === 'outpaint' ? 'outpaint-mobile-layout' : ''}`}>
-                        <div className={`mobile-preview ${activeMode !== 'outpaint' ? 'active' : ''}`}>
-                            {renderPreviewContent()}
-                        </div>
-                        <aside className="controls-panel">
-                            <div className="control-section mode-control-section">
-                                <label className="control-label">任务</label>
-                                <div className="mode-tabs">
-                                    <button
-                                        className={`mode-tab ${activeMode === 'outpaint' ? 'active' : ''}`}
-                                        onClick={() => setActiveMode('outpaint')}
-                                    >
-                                        <span className="tab-icon">扩</span>
-                                        <span className="tab-title">Outpaint</span>
-                                    </button>
-                                    <button
-                                        className={`mode-tab ${activeMode === 'text2img' ? 'active' : ''}`}
-                                        onClick={() => setActiveMode('text2img')}
-                                    >
-                                        <span className="tab-icon">文</span>
-                                        <span className="tab-title">Imagine</span>
-                                    </button>
-                                    <button
-                                        className={`mode-tab ${activeMode === 'img2img' ? 'active' : ''}`}
-                                        onClick={() => setActiveMode('img2img')}
-                                    >
-                                        <span className="tab-icon">图</span>
-                                        <span className="tab-title">Image</span>
-                                    </button>
-                                </div>
+                            <div className={`mobile-preview ${activeMode !== 'outpaint' ? 'active' : ''}`}>
+                                {renderPreviewContent()}
                             </div>
-
-                            <div className="control-section">
-                                <label className="control-label">模型</label>
-                                <div className="prompt-box" style={{ padding: '4px 8px' }}>
-                                    <select
-                                        value={selectedModel}
-                                        onChange={(e) => setSelectedModel(e.target.value)}
-                                        style={{
-                                            width: '100%',
-                                            background: 'transparent',
-                                            border: 'none',
-                                            color: 'var(--text-primary)',
-                                            padding: '8px 4px',
-                                            outline: 'none',
-                                            fontSize: '14px'
-                                        }}
-                                    >
-                                        {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {activeMode !== 'outpaint' && (
-                                <div className="control-section">
-                                    <label className="control-label">图片比例</label>
-                                    <div className="ratio-options">
-                                        {ASPECT_RATIOS.map((ratio) => (
-                                            <button
-                                                key={ratio.id}
-                                                className={`ratio-option ${selectedRatio === ratio.id ? 'active' : ''}`}
-                                                onClick={() => setSelectedRatio(ratio.id)}
-                                            >
-                                                {ratio.name}
-                                            </button>
-                                        ))}
+                            <aside className="controls-panel">
+                                <div className="control-section mode-control-section">
+                                    <label className="control-label">任务</label>
+                                    <div className="mode-tabs">
+                                        <button
+                                            className={`mode-tab ${activeMode === 'outpaint' ? 'active' : ''}`}
+                                            onClick={() => setActiveMode('outpaint')}
+                                        >
+                                            <span className="tab-icon">扩</span>
+                                            <span className="tab-title">Outpaint</span>
+                                        </button>
+                                        <button
+                                            className={`mode-tab ${activeMode === 'text2img' ? 'active' : ''}`}
+                                            onClick={() => setActiveMode('text2img')}
+                                        >
+                                            <span className="tab-icon">文</span>
+                                            <span className="tab-title">Imagine</span>
+                                        </button>
+                                        <button
+                                            className={`mode-tab ${activeMode === 'img2img' ? 'active' : ''}`}
+                                            onClick={() => setActiveMode('img2img')}
+                                        >
+                                            <span className="tab-icon">图</span>
+                                            <span className="tab-title">Image</span>
+                                        </button>
                                     </div>
                                 </div>
-                            )}
 
-                            {selectedModel === 'gemini-3-pro-image-preview' && (
                                 <div className="control-section">
-                                    <label className="control-label">分辨率</label>
-                                    <div className="resolution-options">
-                                        {RESOLUTIONS.map(r => (
-                                            <button
-                                                key={r.id}
-                                                className={`resolution-option ${selectedResolution === r.id ? 'active' : ''}`}
-                                                onClick={() => setSelectedResolution(r.id)}
-                                            >
-                                                {r.name}
-                                            </button>
-                                        ))}
+                                    <label className="control-label">模型</label>
+                                    <div className="prompt-box" style={{ padding: '4px 8px' }}>
+                                        <select
+                                            value={selectedModel}
+                                            onChange={(e) => setSelectedModel(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: 'var(--text-primary)',
+                                                padding: '8px 4px',
+                                                outline: 'none',
+                                                fontSize: '14px'
+                                            }}
+                                        >
+                                            {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                        </select>
                                     </div>
                                 </div>
-                            )}
 
-                            {activeMode === 'img2img' && (
-                                <div className="control-section">
-                                    <label className="control-label">输入图片</label>
-                                    <ImageToImageUploader
-                                        onImageReady={setReferenceImage}
-                                        currentImage={referenceImage?.data}
-                                    />
-                                </div>
-                            )}
-
-                            <div className="control-section">
-                                <div className="label-row">
-                                    <label className="control-label">提示词*</label>
-                                    <button className="inspiration-toggle" onClick={() => setPrompt('')}>清空</button>
-                                </div>
-                                <div className="prompt-box">
-                                    <textarea
-                                        placeholder="撰写提示..."
-                                        value={prompt}
-                                        onChange={(e) => setPrompt(e.target.value)}
-                                        rows={4}
-                                    />
-                                </div>
-                                <button className="inspiration-toggle" style={{ alignSelf: 'flex-end' }} onClick={() => setShowInspiration(!showInspiration)}>帮我写</button>
-                                {showInspiration && (
-                                    <div className="inspiration-panel">
-                                        <div className="inspiration-list">
-                                            {inspirationPrompts.map((item) => (
+                                {activeMode !== 'outpaint' && (
+                                    <div className="control-section">
+                                        <label className="control-label">图片比例</label>
+                                        <div className="ratio-options">
+                                            {ASPECT_RATIOS.map((ratio) => (
                                                 <button
-                                                    key={item.title}
-                                                    className="inspiration-item"
-                                                    onClick={() => {
-                                                        setPrompt(item.prompt);
-                                                        setShowInspiration(false);
-                                                    }}
+                                                    key={ratio.id}
+                                                    className={`ratio-option ${selectedRatio === ratio.id ? 'active' : ''}`}
+                                                    onClick={() => setSelectedRatio(ratio.id)}
                                                 >
-                                                    <span>{item.emoji}</span>
-                                                    <span>{item.title}</span>
+                                                    {ratio.name}
                                                 </button>
-                                            ))}
-                                        </div>
-
-                                        <div className="example-cases-header">精选案例（来自 Awesome-Nano-Banana-images）</div>
-                                        <div className="example-cases-toolbar">
-                                            <div className="example-case-filters">
-                                                {caseFilterOptions.map((option) => (
-                                                    <button
-                                                        key={option.id}
-                                                        className={`example-case-filter ${selectedCaseFilter === option.id ? 'active' : ''}`}
-                                                        onClick={() => setSelectedCaseFilter(option.id)}
-                                                    >
-                                                        {option.label}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <button className="example-case-random" onClick={applyRandomCase}>随机来一个</button>
-                                        </div>
-                                        <div className="example-cases-list">
-                                            {filteredExampleCases.map((exampleCase) => (
-                                                <div key={exampleCase.id} className="example-case-card">
-                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                    <img src={exampleCase.imageUrl} alt={exampleCase.title} className="example-case-image" loading="lazy" />
-                                                    <div className="example-case-content">
-                                                        <p className="example-case-title">{exampleCase.title}</p>
-                                                        <p className="example-case-mode">{exampleCase.mode === 'img2img' ? '图生图案例' : '文生图案例'}</p>
-                                                        <div className="example-case-actions">
-                                                            <button className="example-case-use" onClick={() => applyExampleCase(exampleCase)}>使用提示词</button>
-                                                            <a className="example-case-link" href={exampleCase.sourceUrl} target="_blank" rel="noopener noreferrer">来源</a>
-                                                        </div>
-                                                    </div>
-                                                </div>
                                             ))}
                                         </div>
                                     </div>
                                 )}
-                            </div>
 
-                            <div className="generate-action-bar">
-                                <button
-                                    className="generate-button"
-                                    disabled={isGenerating || (activeMode !== 'outpaint' && !prompt.trim())}
-                                    onClick={handleGenerate}
-                                >
-                                    {isGenerating ? <><span className="btn-spinner"></span> 运行中</> : <>运行</>}
-                                </button>
-                            </div>
-
-                            {error && <div className="error-alert">{error}</div>}
-                        </aside>
-
-                        <div className="main-content">
-                            {activeMode === 'outpaint' && (
-                                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, gap: 12 }}>
-                                    <div className="alignment-toolbar" style={{ margin: 0, padding: '4px 12px' }}>
-                                        <button className={`nav-tab ${outpaintView === 'editor' ? 'active' : ''}`} onClick={() => setOutpaintView('editor')}>扩绘编辑器</button>
-                                        <button className={`nav-tab ${outpaintView === 'result' ? 'active' : ''}`} onClick={() => setOutpaintView('result')}>结果{resultImage ? ' ✓' : ''}</button>
+                                {selectedModel === 'gemini-3-pro-image-preview' && (
+                                    <div className="control-section">
+                                        <label className="control-label">分辨率</label>
+                                        <div className="resolution-options">
+                                            {RESOLUTIONS.map(r => (
+                                                <button
+                                                    key={r.id}
+                                                    className={`resolution-option ${selectedResolution === r.id ? 'active' : ''}`}
+                                                    onClick={() => setSelectedResolution(r.id)}
+                                                >
+                                                    {r.name}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
 
-                            {activeMode === 'outpaint' && outpaintView === 'editor' ? (
-                                <OutpaintEditor
-                                    onCompositeReady={setOutpaintData}
-                                    aspectRatio={selectedRatio}
-                                    onAspectRatioChange={setSelectedRatio}
-                                />
-                            ) : (
-                                <div className="desktop-preview" style={{ flex: 1, margin: 0 }}>
-                                    {renderPreviewContent()}
+                                {activeMode === 'img2img' && (
+                                    <div className="control-section">
+                                        <label className="control-label">输入图片</label>
+                                        <ImageToImageUploader
+                                            onImageReady={setReferenceImage}
+                                            currentImage={referenceImage?.data}
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="control-section">
+                                    <div className="label-row">
+                                        <label className="control-label">提示词*</label>
+                                        <button className="inspiration-toggle" onClick={() => setPrompt('')}>清空</button>
+                                    </div>
+                                    <div className="prompt-box">
+                                        <textarea
+                                            placeholder="撰写提示..."
+                                            value={prompt}
+                                            onChange={(e) => setPrompt(e.target.value)}
+                                            rows={4}
+                                        />
+                                    </div>
+                                    <button className="inspiration-toggle" style={{ alignSelf: 'flex-end' }} onClick={() => setShowInspiration(!showInspiration)}>帮我写</button>
+                                    {showInspiration && (
+                                        <div className="inspiration-panel">
+                                            <div className="inspiration-list">
+                                                {inspirationPrompts.map((item) => (
+                                                    <button
+                                                        key={item.title}
+                                                        className="inspiration-item"
+                                                        onClick={() => {
+                                                            setPrompt(item.prompt);
+                                                            setShowInspiration(false);
+                                                        }}
+                                                    >
+                                                        <span>{item.emoji}</span>
+                                                        <span>{item.title}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            <div className="example-cases-header">精选案例（来自 Awesome-Nano-Banana-images）</div>
+                                            <div className="example-cases-toolbar">
+                                                <div className="example-case-filters">
+                                                    {caseFilterOptions.map((option) => (
+                                                        <button
+                                                            key={option.id}
+                                                            className={`example-case-filter ${selectedCaseFilter === option.id ? 'active' : ''}`}
+                                                            onClick={() => setSelectedCaseFilter(option.id)}
+                                                        >
+                                                            {option.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <button className="example-case-random" onClick={applyRandomCase}>随机来一个</button>
+                                            </div>
+                                            <div className="example-cases-list">
+                                                {filteredExampleCases.map((exampleCase) => (
+                                                    <div key={exampleCase.id} className="example-case-card">
+                                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                        <img src={exampleCase.imageUrl} alt={exampleCase.title} className="example-case-image" loading="lazy" />
+                                                        <div className="example-case-content">
+                                                            <p className="example-case-title">{exampleCase.title}</p>
+                                                            <p className="example-case-mode">{exampleCase.mode === 'img2img' ? '图生图案例' : '文生图案例'}</p>
+                                                            <div className="example-case-actions">
+                                                                <button className="example-case-use" onClick={() => applyExampleCase(exampleCase)}>使用提示词</button>
+                                                                <a className="example-case-link" href={exampleCase.sourceUrl} target="_blank" rel="noopener noreferrer">来源</a>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
+
+                                <div className="generate-action-bar">
+                                    <button
+                                        className="generate-button"
+                                        disabled={isGenerating || (activeMode !== 'outpaint' && !prompt.trim())}
+                                        onClick={handleGenerate}
+                                    >
+                                        {isGenerating ? <><span className="btn-spinner"></span> 运行中</> : <>运行</>}
+                                    </button>
+                                </div>
+
+                                {error && <div className="error-alert">{error}</div>}
+                            </aside>
+
+                            <div className="main-content">
+                                {activeMode === 'outpaint' && (
+                                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24, gap: 12 }}>
+                                        <div className="alignment-toolbar" style={{ margin: 0, padding: '4px 12px' }}>
+                                            <button className={`nav-tab ${outpaintView === 'editor' ? 'active' : ''}`} onClick={() => setOutpaintView('editor')}>扩绘编辑器</button>
+                                            <button className={`nav-tab ${outpaintView === 'result' ? 'active' : ''}`} onClick={() => setOutpaintView('result')}>结果{resultImage ? ' ✓' : ''}</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeMode === 'outpaint' && outpaintView === 'editor' ? (
+                                    <OutpaintEditor
+                                        onCompositeReady={setOutpaintData}
+                                        aspectRatio={selectedRatio}
+                                        onAspectRatioChange={setSelectedRatio}
+                                    />
+                                ) : (
+                                    <div className="desktop-preview" style={{ flex: 1, margin: 0 }}>
+                                        {renderPreviewContent()}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -833,6 +833,13 @@ export default function Home() {
                         <div className="preview-detail-image-wrap">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={previewDetailItem.imageUrl} alt="preview" />
+                            {previewDetailItem.inputImageUrl && (
+                                <div className="reference-image-overlay">
+                                    <span className="reference-label">参考图</span>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={previewDetailItem.inputImageUrl} alt="参考图" />
+                                </div>
+                            )}
                         </div>
                         <div className="preview-detail-body">
                             <div className="preview-detail-meta">
@@ -840,24 +847,7 @@ export default function Home() {
                                 <span>{new Date(previewDetailItem.timestamp).toLocaleString('zh-CN')}</span>
                             </div>
                             <p className="preview-detail-prompt">{previewDetailItem.prompt}</p>
-                            {previewDetailItem.inputImageUrl && (
-                                <div style={{ display: 'grid', gap: 8 }}>
-                                    <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>参考图</p>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                        src={previewDetailItem.inputImageUrl}
-                                        alt="input reference"
-                                        style={{
-                                            width: '100%',
-                                            maxHeight: 200,
-                                            objectFit: 'contain',
-                                            borderRadius: 8,
-                                            border: '1px solid var(--border-color)',
-                                            background: 'var(--bg-tertiary)',
-                                        }}
-                                    />
-                                </div>
-                            )}
+
                             <div className="preview-detail-actions">
                                 <button className="toolbar-btn primary" onClick={applyPreviewDetail}>应用到创作</button>
                                 <button className="toolbar-btn" onClick={() => setPreviewDetailItem(null)}>关闭</button>

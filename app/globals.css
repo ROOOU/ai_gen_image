@@ -846,6 +846,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 16px;
+  position: relative;
 }
 
 .preview-detail-image-wrap img {
