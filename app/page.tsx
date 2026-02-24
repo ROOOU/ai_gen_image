@@ -831,15 +831,17 @@ export default function Home() {
                     <div className="preview-detail-modal" onClick={(e) => e.stopPropagation()}>
                         <button className="preview-detail-close" onClick={() => setPreviewDetailItem(null)}>✕</button>
                         <div className="preview-detail-image-wrap">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={previewDetailItem.imageUrl} alt="preview" />
-                            {previewDetailItem.inputImageUrl && (
-                                <div className="reference-image-overlay">
-                                    <span className="reference-label">参考图</span>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={previewDetailItem.inputImageUrl} alt="参考图" />
-                                </div>
-                            )}
+                            <div className="preview-image-tight-container">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={previewDetailItem.imageUrl} alt="preview" />
+                                {previewDetailItem.inputImageUrl && (
+                                    <div className="reference-image-overlay">
+                                        <span className="reference-label">参考图</span>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={previewDetailItem.inputImageUrl} alt="参考图" />
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <div className="preview-detail-body">
                             <div className="preview-detail-meta">

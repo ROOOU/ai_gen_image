@@ -147,15 +147,17 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                             <button className="modal-close" onClick={() => setSelectedItem(null)}>✕</button>
 
                             <div className="modal-image-container">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img className="main-result-image" src={selectedItem.imageUrl} alt={selectedItem.prompt} />
-                                {selectedItem.inputImageUrl && (
-                                    <div className="reference-image-overlay">
-                                        <span className="reference-label">参考图</span>
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={selectedItem.inputImageUrl} alt="参考图" />
-                                    </div>
-                                )}
+                                <div className="preview-image-tight-container">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img className="main-result-image" src={selectedItem.imageUrl} alt={selectedItem.prompt} />
+                                    {selectedItem.inputImageUrl && (
+                                        <div className="reference-image-overlay">
+                                            <span className="reference-label">参考图</span>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={selectedItem.inputImageUrl} alt="参考图" />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="modal-info">
@@ -342,19 +344,25 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                     background: #0a0a0a;
                     padding: 20px;
                     max-height: 60vh;
+                }
+                .preview-image-tight-container {
                     position: relative;
+                    display: inline-block;
+                    max-width: 100%;
+                    max-height: 50vh;
                 }
                 .modal-image-container .main-result-image {
                     max-width: 100%;
                     max-height: 50vh;
                     object-fit: contain;
                     border-radius: 8px;
+                    display: block;
                 }
                 .reference-image-overlay {
                     position: absolute;
-                    top: 20px;
-                    left: 20px;
-                    width: 120px;
+                    top: 8px;
+                    left: 8px;
+                    width: calc(33.33% - 16px);
                     background: rgba(0, 0, 0, 0.6);
                     border-radius: 8px;
                     padding: 4px;
