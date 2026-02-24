@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import OutpaintEditor from '@/components/OutpaintEditor';
 import ImageToImageUploader from '@/components/ImageToImageUploader';
+import { NANO_BANANA_CASES } from '@/lib/nanoBananaCases';
 
 /**
  * 将 base64 图片缩小为缩略图 (最大 200px)
@@ -318,6 +319,12 @@ export default function Home() {
         }
     };
 
+    const applyExampleCase = (exampleCase: typeof NANO_BANANA_CASES[number]) => {
+        setPrompt(exampleCase.prompt);
+        setActiveMode(exampleCase.mode);
+        setShowInspiration(false);
+    };
+
     return (
         <div className="app-container">
             <header className="app-header">
@@ -478,6 +485,24 @@ export default function Home() {
                                                     <span>{item.emoji}</span>
                                                     <span>{item.title}</span>
                                                 </button>
+                                            ))}
+                                        </div>
+
+                                        <div className="example-cases-header">精选案例（来自 Awesome-Nano-Banana-images）</div>
+                                        <div className="example-cases-list">
+                                            {NANO_BANANA_CASES.map((exampleCase) => (
+                                                <div key={exampleCase.id} className="example-case-card">
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                    <img src={exampleCase.imageUrl} alt={exampleCase.title} className="example-case-image" loading="lazy" />
+                                                    <div className="example-case-content">
+                                                        <p className="example-case-title">{exampleCase.title}</p>
+                                                        <p className="example-case-mode">{exampleCase.mode === 'img2img' ? '图生图案例' : '文生图案例'}</p>
+                                                        <div className="example-case-actions">
+                                                            <button className="example-case-use" onClick={() => applyExampleCase(exampleCase)}>使用提示词</button>
+                                                            <a className="example-case-link" href={exampleCase.sourceUrl} target="_blank" rel="noopener noreferrer">来源</a>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>
