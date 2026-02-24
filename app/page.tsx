@@ -402,9 +402,31 @@ export default function Home() {
 
             <main className="app-main">
                 {activeTab === 'generate' && (
-                    <div className={`generate-layout ${activeMode === 'outpaint' ? 'outpaint-mobile-layout' : ''}`}>
+                    <div className="generate-tab-view">
+                        <div className="mobile-mode-switcher">
+                            <button
+                                className={`mobile-mode-btn ${activeMode === 'outpaint' ? 'active' : ''}`}
+                                onClick={() => setActiveMode('outpaint')}
+                            >
+                                扩图
+                            </button>
+                            <button
+                                className={`mobile-mode-btn ${activeMode === 'text2img' ? 'active' : ''}`}
+                                onClick={() => setActiveMode('text2img')}
+                            >
+                                文生图
+                            </button>
+                            <button
+                                className={`mobile-mode-btn ${activeMode === 'img2img' ? 'active' : ''}`}
+                                onClick={() => setActiveMode('img2img')}
+                            >
+                                图生图
+                            </button>
+                        </div>
+
+                        <div className={`generate-layout ${activeMode === 'outpaint' ? 'outpaint-mobile-layout' : ''}`}>
                         <aside className="controls-panel">
-                            <div className="control-section">
+                            <div className="control-section mode-control-section">
                                 <label className="control-label">任务</label>
                                 <div className="mode-tabs">
                                     <button
@@ -604,6 +626,7 @@ export default function Home() {
                                     )}
                                 </div>
                             )}
+                        </div>
                         </div>
                     </div>
                 )}
