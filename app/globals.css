@@ -1048,6 +1048,20 @@ body {
     grid-template-rows: auto 1fr;
   }
 
+  .generate-layout.outpaint-mobile-layout {
+    grid-template-rows: minmax(320px, 52vh) auto;
+  }
+
+  .outpaint-mobile-layout .main-content {
+    order: 1;
+    padding: 12px;
+  }
+
+  .outpaint-mobile-layout .controls-panel {
+    order: 2;
+    padding: 14px;
+  }
+
   /* Mobile Preview - Shows at top when active */
   .mobile-preview {
     display: block;
@@ -1211,6 +1225,31 @@ body {
   margin: 0 auto;
 }
 
+.outpaint-upload-card {
+  width: min(420px, 92%);
+  min-height: 220px;
+  border: 1px dashed var(--border-hover);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.outpaint-upload-btn {
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .selection-box {
   position: relative;
   border: 1.5px solid var(--accent);
@@ -1352,4 +1391,15 @@ body {
 .ratio-dims {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+  .editor-canvas-container {
+    height: min(460px, 52vh);
+    border-radius: 12px;
+  }
+
+  .outpaint-upload-card {
+    min-height: 180px;
+  }
 }

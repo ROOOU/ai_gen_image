@@ -402,7 +402,7 @@ export default function Home() {
 
             <main className="app-main">
                 {activeTab === 'generate' && (
-                    <div className="generate-layout">
+                    <div className={`generate-layout ${activeMode === 'outpaint' ? 'outpaint-mobile-layout' : ''}`}>
                         <aside className="controls-panel">
                             <div className="control-section">
                                 <label className="control-label">任务</label>

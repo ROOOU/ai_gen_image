@@ -194,6 +194,15 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
         setDragImageStart({ x: imageX, y: imageY });
     };
 
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (!originalImage) return;
+        const touch = e.touches[0];
+        if (!touch) return;
+        setIsDragging(true);
+        setDragStart({ x: touch.clientX, y: touch.clientY });
+        setDragImageStart({ x: imageX, y: imageY });
+    };
+
     const handleMouseMove = useCallback((e: MouseEvent) => {
         if (isDragging && selectionBoxRef.current && originalImage) {
             const boxRect = selectionBoxRef.current.getBoundingClientRect();
@@ -210,16 +219,39 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
         setIsDragging(false);
     }, []);
 
+    const handleTouchMove = useCallback((e: TouchEvent) => {
+        if (isDragging && selectionBoxRef.current && originalImage) {
+            const touch = e.touches[0];
+            if (!touch) return;
+
+            e.preventDefault();
+            const boxRect = selectionBoxRef.current.getBoundingClientRect();
+            const dx = (touch.clientX - dragStart.x) * (canvasWidth / boxRect.width);
+            const dy = (touch.clientY - dragStart.y) * (canvasHeight / boxRect.height);
+
+            setImageX(dragImageStart.x + dx / canvasWidth);
+            setImageY(dragImageStart.y + dy / canvasHeight);
+        }
+    }, [isDragging, dragStart, dragImageStart, canvasWidth, canvasHeight, originalImage]);
+
+    const handleTouchEnd = useCallback(() => {
+        setIsDragging(false);
+    }, []);
+
     useEffect(() => {
         if (isDragging) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('touchmove', handleTouchMove, { passive: false });
+            window.addEventListener('touchend', handleTouchEnd);
             return () => {
                 window.removeEventListener('mousemove', handleMouseMove);
                 window.removeEventListener('mouseup', handleMouseUp);
+                window.removeEventListener('touchmove', handleTouchMove);
+                window.removeEventListener('touchend', handleTouchEnd);
             };
         }
-    }, [isDragging, handleMouseMove, handleMouseUp]);
+    }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
     return (
         <div className="flex flex-col items-center w-full gap-4">
@@ -267,11 +299,12 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
 
                 {!originalImage ? (
                     <div
-                        className="flex flex-col items-center cursor-pointer"
+                        className="outpaint-upload-card"
                         onClick={() => fileInputRef.current?.click()}
                     >
                         <Icons.Image />
-                        <p className="text-[var(--text-secondary)] text-sm">上传或拖拽图片到此处</p>
+                        <p className="text-[var(--text-secondary)] text-sm">点击上传图片开始扩图</p>
+                        <button className="outpaint-upload-btn" type="button">选择图片</button>
                     </div>
                 ) : (
                     <div
@@ -291,6 +324,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                         {/* Draggable Image Layer */}
                         <div
                             onMouseDown={handleMouseDown}
+                            onTouchStart={handleTouchStart}
                             className={`z-10 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
                             style={{
                                 position: 'absolute',
@@ -298,6 +332,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                                 top: `${imageY * 100}%`,
                                 width: `${(originalImage.width * imageScale / canvasWidth) * 100}%`,
                                 height: `${(originalImage.height * imageScale / canvasHeight) * 100}%`,
+                                touchAction: 'none',
                             }}
                         >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
