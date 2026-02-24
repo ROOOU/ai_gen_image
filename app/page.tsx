@@ -5,6 +5,8 @@ import OutpaintEditor from '@/components/OutpaintEditor';
 import ImageToImageUploader from '@/components/ImageToImageUploader';
 import { NANO_BANANA_CASES } from '@/lib/nanoBananaCases';
 
+type ExampleCaseFilter = 'all' | 'design' | 'analysis' | 'visual' | 'story';
+
 /**
  * 将 base64 图片缩小为缩略图 (最大 200px)
  */
@@ -101,6 +103,7 @@ export default function Home() {
     const [showInspiration, setShowInspiration] = useState(false);
     const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
     const [outpaintView, setOutpaintView] = useState<'editor' | 'result'>('editor');
+    const [selectedCaseFilter, setSelectedCaseFilter] = useState<ExampleCaseFilter>('all');
 
     const inspirationPrompts = [
         { title: '赛博朋克城市', prompt: 'Cyberpunk city at night, neon lights, rain, futuristic', emoji: '🌃' },
@@ -325,6 +328,26 @@ export default function Home() {
         setShowInspiration(false);
     };
 
+    const caseFilterOptions: Array<{ id: ExampleCaseFilter; label: string }> = [
+        { id: 'all', label: '全部' },
+        { id: 'design', label: '设计' },
+        { id: 'analysis', label: '解析' },
+        { id: 'visual', label: '视觉特效' },
+        { id: 'story', label: '叙事世界观' },
+    ];
+
+    const filteredExampleCases = selectedCaseFilter === 'all'
+        ? NANO_BANANA_CASES
+        : NANO_BANANA_CASES.filter((item) => item.category === selectedCaseFilter);
+
+    const applyRandomCase = () => {
+        if (filteredExampleCases.length === 0) {
+            return;
+        }
+        const randomIndex = Math.floor(Math.random() * filteredExampleCases.length);
+        applyExampleCase(filteredExampleCases[randomIndex]);
+    };
+
     return (
         <div className="app-container">
             <header className="app-header">
@@ -489,8 +512,22 @@ export default function Home() {
                                         </div>
 
                                         <div className="example-cases-header">精选案例（来自 Awesome-Nano-Banana-images）</div>
+                                        <div className="example-cases-toolbar">
+                                            <div className="example-case-filters">
+                                                {caseFilterOptions.map((option) => (
+                                                    <button
+                                                        key={option.id}
+                                                        className={`example-case-filter ${selectedCaseFilter === option.id ? 'active' : ''}`}
+                                                        onClick={() => setSelectedCaseFilter(option.id)}
+                                                    >
+                                                        {option.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <button className="example-case-random" onClick={applyRandomCase}>随机来一个</button>
+                                        </div>
                                         <div className="example-cases-list">
-                                            {NANO_BANANA_CASES.map((exampleCase) => (
+                                            {filteredExampleCases.map((exampleCase) => (
                                                 <div key={exampleCase.id} className="example-case-card">
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img src={exampleCase.imageUrl} alt={exampleCase.title} className="example-case-image" loading="lazy" />
