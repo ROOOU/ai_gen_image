@@ -1,6 +1,29 @@
 import { NextResponse } from 'next/server';
 import { getImage, isR2Configured } from '@/lib/r2';
 
+function getContentTypeFromKey(key: string): string {
+    const ext = key.split('.').pop()?.toLowerCase();
+    switch (ext) {
+        case 'jpg':
+        case 'jpeg':
+            return 'image/jpeg';
+        case 'webp':
+            return 'image/webp';
+        case 'gif':
+            return 'image/gif';
+        case 'png':
+        default:
+            return 'image/png';
+    }
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return fallback;
+}
+
 /**
  * GET /api/history/image?key=xxx
  * 代理获取 R2 图片
@@ -35,15 +58,15 @@ export async function GET(request: Request) {
 
         return new NextResponse(new Uint8Array(imageBuffer), {
             headers: {
-                'Content-Type': 'image/png',
+                'Content-Type': getContentTypeFromKey(key),
                 'Cache-Control': 'public, max-age=31536000, immutable',
             },
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[Image API] GET error:', error);
         return NextResponse.json({
             success: false,
-            error: error.message || '获取图片失败',
+            error: getErrorMessage(error, '获取图片失败'),
         }, { status: 500 });
     }
 }

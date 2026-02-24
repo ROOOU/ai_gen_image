@@ -28,12 +28,10 @@ const ASPECT_RATIOS = [
     { id: '3:4', ratio: 3 / 4, name: '3:4', dims: '768 x 1024' },
 ];
 
-type OutpaintMode = 'standard' | 'masked';
-
 // Debounce helper
-function debounce<T extends (...args: any[]) => void>(func: T, wait: number): T {
-    let timeout: NodeJS.Timeout;
-    return ((...args: any[]) => {
+function debounce<T extends (...args: unknown[]) => void>(func: T, wait: number): T {
+    let timeout: ReturnType<typeof setTimeout>;
+    return ((...args: Parameters<T>) => {
         clearTimeout(timeout);
         timeout = setTimeout(() => func(...args), wait);
     }) as T;
@@ -48,7 +46,6 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
     const [imageY, setImageY] = useState(0);
     const [imageScale, setImageScale] = useState(1);
 
-    const [outpaintMode, setOutpaintMode] = useState<OutpaintMode>('standard');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -303,6 +300,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
                                 height: `${(originalImage.height * imageScale / canvasHeight) * 100}%`,
                             }}
                         >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src={originalDataUrl}
                                 style={{ width: '100%', height: '100%', display: 'block', objectFit: 'fill' }}

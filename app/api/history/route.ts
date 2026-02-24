@@ -12,6 +12,22 @@ import {
     HistoryItem,
 } from '@/lib/r2';
 
+interface CreateHistoryRequestBody {
+    imageData?: string;
+    thumbnailData?: string;
+    prompt?: string;
+    mode?: 'text2img' | 'img2img' | 'outpaint';
+    model?: string;
+    aspectRatio?: string;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return fallback;
+}
+
 /**
  * GET /api/history
  * 获取历史记录列表
@@ -49,11 +65,11 @@ export async function GET(request: Request) {
             success: true,
             history: historyWithUrls,
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[History API] GET error:', error);
         return NextResponse.json({
             success: false,
-            error: error.message || '获取历史记录失败',
+            error: getErrorMessage(error, '获取历史记录失败'),
         }, { status: 500 });
     }
 }
@@ -88,7 +104,7 @@ export async function POST(request: Request) {
         const userId = getUserIdFromApiKey(apiKey);
         console.log('[History API] POST - userId:', userId);
 
-        const body = await request.json();
+        const body = await request.json() as CreateHistoryRequestBody;
         const { imageData, thumbnailData, prompt, mode, model, aspectRatio } = body;
         console.log('[History API] POST - prompt:', prompt, 'mode:', mode, 'model:', model);
 
@@ -149,11 +165,11 @@ export async function POST(request: Request) {
                 error: '保存历史记录失败',
             }, { status: 500 });
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[History API] POST error:', error);
         return NextResponse.json({
             success: false,
-            error: error.message || '保存历史记录失败',
+            error: getErrorMessage(error, '保存历史记录失败'),
         }, { status: 500 });
     }
 }
@@ -198,11 +214,11 @@ export async function DELETE(request: Request) {
                 error: '删除失败',
             }, { status: 500 });
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[History API] DELETE error:', error);
         return NextResponse.json({
             success: false,
-            error: error.message || '删除历史记录失败',
+            error: getErrorMessage(error, '删除历史记录失败'),
         }, { status: 500 });
     }
 }

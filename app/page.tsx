@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import OutpaintEditor from '@/components/OutpaintEditor';
 import ImageToImageUploader from '@/components/ImageToImageUploader';
-import HistoryPanel from '@/components/HistoryPanel';
 
 /**
  * 将 base64 图片缩小为缩略图 (最大 200px)
@@ -54,14 +53,6 @@ const MODELS = [
     { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: '专业品质' },
 ];
 
-const ASPECT_RATIOS = [
-    { id: '1:1', name: '1:1', label: '正方形' },
-    { id: '9:16', name: '9:16', label: '手机竖屏' },
-    { id: '16:9', name: '16:9', label: '宽屏' },
-    { id: '3:2', name: '3:2', label: '摄影' },
-    { id: '2:3', name: '2:3', label: '肖像' },
-];
-
 const RESOLUTIONS = [
     { id: '1K', name: '1K' },
     { id: '2K', name: '2K' },
@@ -78,6 +69,19 @@ interface HistoryItem {
     thumbnailUrl?: string;
 }
 
+interface OutpaintData {
+    originalImage: string;
+}
+
+interface GenerateRequestBody {
+    model: string;
+    prompt: string;
+    mode: 'text2img' | 'img2img' | 'outpaint';
+    aspectRatio?: string;
+    imageSize?: string;
+    images?: Array<{ data: string; mimeType: string }>;
+}
+
 export default function Home() {
     const [activeTab, setActiveTab] = useState<'generate' | 'history' | 'settings'>('generate');
     const [apiKey, setApiKey] = useState('');
@@ -90,13 +94,38 @@ export default function Home() {
     const [resultImage, setResultImage] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [activeMode, setActiveMode] = useState<'text2img' | 'img2img' | 'outpaint'>('text2img');
-    const [outpaintData, setOutpaintData] = useState<any>(null);
+    const [outpaintData, setOutpaintData] = useState<OutpaintData | null>(null);
     const [referenceImage, setReferenceImage] = useState<{ data: string; mimeType: string } | null>(null);
     const [generationProgress, setGenerationProgress] = useState(0);
     const [showInspiration, setShowInspiration] = useState(false);
-    const [showWelcomeTip, setShowWelcomeTip] = useState(true);
     const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
     const [outpaintView, setOutpaintView] = useState<'editor' | 'result'>('editor');
+
+    const inspirationPrompts = [
+        { title: '赛博朋克城市', prompt: 'Cyberpunk city at night, neon lights, rain, futuristic', emoji: '🌃' },
+        { title: '梦幻森林', prompt: 'Enchanted forest with glowing mushrooms, fairy lights, magical atmosphere', emoji: '🌲' },
+        { title: '未来科技', prompt: 'Futuristic technology interface, holographic displays, sleek design', emoji: '🚀' },
+        { title: '古风山水', prompt: 'Traditional Chinese landscape painting, mountains, mist, ink wash style', emoji: '🏔️' },
+        { title: '可爱动物', prompt: 'Cute fluffy kitten playing with yarn, soft lighting, cozy home', emoji: '🐱' },
+        { title: '美食摄影', prompt: 'Gourmet food photography, delicious pasta, professional lighting', emoji: '🍝' },
+    ];
+
+    const loadHistory = useCallback(async (currentApiKey: string = apiKey) => {
+        try {
+            const headers: HeadersInit = {};
+            if (currentApiKey) {
+                headers['x-api-key'] = currentApiKey;
+            }
+
+            const res = await fetch('/api/history', { headers });
+            const data = await res.json();
+            if (data.success) {
+                setHistory(data.history);
+            }
+        } catch {
+            console.error('Failed to load history');
+        }
+    }, [apiKey]);
 
     useEffect(() => {
         const savedKey = localStorage.getItem('gemini_api_key');
@@ -109,40 +138,34 @@ export default function Home() {
                 const data = await res.json();
                 if (data.success) {
                     setIsServerKeyConfigured(true);
+                    if (!savedKey) {
+                        loadHistory('');
+                    }
                 }
-            } catch (e) {
+            } catch {
                 // Ignore error
             }
         };
         checkServerKey();
 
-        loadHistory();
+        loadHistory(savedKey || '');
 
-        const hasSeenTip = localStorage.getItem('has_seen_welcome_tip');
-        if (hasSeenTip) setShowWelcomeTip(false);
-    }, []);
-
-    const dismissWelcomeTip = () => {
-        setShowWelcomeTip(false);
-        localStorage.setItem('has_seen_welcome_tip', 'true');
-    };
-
-    const loadHistory = async () => {
-        const key = localStorage.getItem('gemini_api_key');
-        if (!key) return;
-        try {
-            const res = await fetch('/api/history', { headers: { 'x-api-key': key } });
-            const data = await res.json();
-            if (data.success) setHistory(data.history);
-        } catch {
-            console.error('Failed to load history');
-        }
-    };
+    }, [loadHistory]);
 
     const handleGenerate = async () => {
         if (!apiKey && !isServerKeyConfigured) {
             setError('请先配置 API Key（或在服务器环境变量中设置）');
             setActiveTab('settings');
+            return;
+        }
+
+        if (activeMode === 'img2img' && !referenceImage?.data) {
+            setError('图生图模式请先上传参考图片');
+            return;
+        }
+
+        if (activeMode === 'outpaint' && !outpaintData?.originalImage) {
+            setError('扩图模式请先上传并调整原图');
             return;
         }
 
@@ -159,7 +182,6 @@ export default function Home() {
         if (activeMode === 'outpaint') setOutpaintView('result');
         setError(null);
         setGenerationProgress(0);
-        setShowWelcomeTip(false);
 
         const progressInterval = setInterval(() => {
             setGenerationProgress(prev => {
@@ -169,9 +191,10 @@ export default function Home() {
         }, 800);
 
         try {
-            const body: any = {
+            const body: GenerateRequestBody = {
                 model: selectedModel,
                 prompt: finalPrompt,
+                mode: 'text2img',
             };
 
             if (selectedRatio) body.aspectRatio = selectedRatio;
@@ -196,9 +219,14 @@ export default function Home() {
                 body.mode = 'text2img';
             }
 
+            const requestHeaders: HeadersInit = { 'Content-Type': 'application/json' };
+            if (apiKey) {
+                requestHeaders['x-api-key'] = apiKey;
+            }
+
             const res = await fetch('/api/gemini', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                headers: requestHeaders,
                 body: JSON.stringify(body),
             });
 
@@ -211,9 +239,14 @@ export default function Home() {
                 if (activeMode === 'outpaint') setOutpaintView('result');
                 const thumbnailData = await generateThumbnail(data.images[0].data);
                 try {
+                    const historyHeaders: HeadersInit = { 'Content-Type': 'application/json' };
+                    if (apiKey) {
+                        historyHeaders['x-api-key'] = apiKey;
+                    }
+
                     await fetch('/api/history', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                        headers: historyHeaders,
                         body: JSON.stringify({
                             imageData: data.images[0].data,
                             thumbnailData,
@@ -225,12 +258,12 @@ export default function Home() {
                 } catch (e) {
                     console.warn('History save failed:', e);
                 }
-                loadHistory();
+                loadHistory(apiKey);
             } else {
                 setError(data.error || '生成失败');
             }
-        } catch (err: any) {
-            setError(err.message || '请求失败');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : '请求失败');
         } finally {
             clearInterval(progressInterval);
             setIsGenerating(false);
@@ -258,13 +291,7 @@ export default function Home() {
         }
     };
 
-    const handleHistorySelect = (item: HistoryItem) => {
-        setResultImage(item.imageUrl);
-        setPrompt(item.prompt);
-        setActiveTab('generate');
-    };
-
-    const groupedHistory = history.reduce((groups: any, item) => {
+    const groupedHistory = history.reduce<Record<string, HistoryItem[]>>((groups, item) => {
         const date = new Date(item.timestamp).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
         const today = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
         const label = date === today ? '今天' : date;
@@ -290,15 +317,6 @@ export default function Home() {
             default: return '';
         }
     };
-
-    const inspirationPrompts = [
-        { title: '赛博朋克城市', prompt: 'Cyberpunk city at night, neon lights, rain, futuristic', emoji: '🌃' },
-        { title: '梦幻森林', prompt: 'Enchanted forest with glowing mushrooms, fairy lights, magical atmosphere', emoji: '🌲' },
-        { title: '未来科技', prompt: 'Futuristic technology interface, holographic displays, sleek design', emoji: '🚀' },
-        { title: '古风山水', prompt: 'Traditional Chinese landscape painting, mountains, mist, ink wash style', emoji: '🏔️' },
-        { title: '可爱动物', prompt: 'Cute fluffy kitten playing with yarn, soft lighting, cozy home', emoji: '🐱' },
-        { title: '美食摄影', prompt: 'Gourmet food photography, delicious pasta, professional lighting', emoji: '🍝' },
-    ];
 
     return (
         <div className="app-container">
@@ -445,6 +463,25 @@ export default function Home() {
                                     />
                                 </div>
                                 <button className="inspiration-toggle" style={{ alignSelf: 'flex-end' }} onClick={() => setShowInspiration(!showInspiration)}>帮我写</button>
+                                {showInspiration && (
+                                    <div className="inspiration-panel">
+                                        <div className="inspiration-list">
+                                            {inspirationPrompts.map((item) => (
+                                                <button
+                                                    key={item.title}
+                                                    className="inspiration-item"
+                                                    onClick={() => {
+                                                        setPrompt(item.prompt);
+                                                        setShowInspiration(false);
+                                                    }}
+                                                >
+                                                    <span>{item.emoji}</span>
+                                                    <span>{item.title}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <button
@@ -488,6 +525,7 @@ export default function Home() {
                                     ) : resultImage ? (
                                         <div className="result-view">
                                             <div className="result-image-container">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img src={resultImage} alt="Generated" />
                                             </div>
                                             <div className="result-toolbar">
@@ -512,7 +550,7 @@ export default function Home() {
                         <h2 className="view-title">生成历史</h2>
                         {Object.keys(groupedHistory).length > 0 ? (
                             <div className="history-list">
-                                {Object.entries(groupedHistory).map(([date, items]: [string, any]) => (
+                                {Object.entries(groupedHistory).map(([date, items]) => (
                                     <div key={date} className="history-group">
                                         <h3 className="history-date">{date}</h3>
                                         <div className="history-grid">
@@ -526,6 +564,7 @@ export default function Home() {
                                                         setActiveTab('generate');
                                                     }}
                                                 >
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img src={item.thumbnailUrl || item.imageUrl} alt="" loading="lazy" />
                                                     <div className="history-overlay">
                                                         <span className="history-mode">{getModeLabel(item.mode)}</span>
@@ -598,13 +637,6 @@ export default function Home() {
                     </div>
                 )}
             </main>
-
-            <HistoryPanel
-                isOpen={activeTab === 'history'}
-                onClose={() => setActiveTab('generate')}
-                onSelectItem={handleHistorySelect}
-                apiKey={apiKey}
-            />
         </div>
     );
 }

@@ -175,9 +175,10 @@ export default function ImageToImageUploader({ onImageReady, currentImage }: Ima
                     border: '1px solid var(--pro-border)',
                     background: 'var(--pro-bg-secondary)',
                 }}>
-                    <img 
-                        src={previewUrl} 
-                        alt="Reference" 
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={previewUrl}
+                        alt="Reference"
                         style={{
                             width: '100%',
                             height: 'auto',

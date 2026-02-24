@@ -1,6 +1,10 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { createHash } from 'crypto';
 
+function isNamedError(error: unknown): error is { name: string } {
+    return typeof error === 'object' && error !== null && 'name' in error;
+}
+
 // R2 配置
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
@@ -146,11 +150,8 @@ export async function getImage(imageKey: string): Promise<Buffer | null> {
         }));
 
         if (response.Body) {
-            const chunks: Uint8Array[] = [];
-            for await (const chunk of response.Body as any) {
-                chunks.push(chunk);
-            }
-            return Buffer.concat(chunks);
+            const bytes = await response.Body.transformToByteArray();
+            return Buffer.from(bytes);
         }
         return null;
     } catch (error) {
@@ -191,9 +192,9 @@ export async function loadHistory(userId: string): Promise<HistoryItem[]> {
             return JSON.parse(bodyContents);
         }
         return [];
-    } catch (error: any) {
+    } catch (error: unknown) {
         // 如果文件不存在，返回空数组
-        if (error.name === 'NoSuchKey') {
+        if (isNamedError(error) && error.name === 'NoSuchKey') {
             return [];
         }
         console.error('Error loading history from R2:', error);

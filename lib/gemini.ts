@@ -8,6 +8,23 @@
 
 import { GoogleGenAI } from '@google/genai';
 
+interface GeminiInlineData {
+  mimeType?: string;
+  data?: string;
+}
+
+interface GeminiPart {
+  text?: string;
+  inlineData?: GeminiInlineData;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 // 可用模型
 export const GEMINI_MODELS = [
   {
@@ -84,7 +101,7 @@ export async function testConnection(apiKey: string): Promise<{ success: boolean
     const ai = new GoogleGenAI({ apiKey });
     
     // 尝试列出模型来验证 API Key
-    const response = await ai.models.generateContent({
+    await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: 'test',
       config: {
@@ -96,10 +113,10 @@ export async function testConnection(apiKey: string): Promise<{ success: boolean
       success: true,
       message: 'API Key 验证成功',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
-      message: error.message || 'API Key 验证失败',
+      message: getErrorMessage(error, 'API Key 验证失败'),
     };
   }
 }
@@ -115,7 +132,10 @@ export async function generateImage(
   try {
     const ai = new GoogleGenAI({ apiKey });
 
-    const generateConfig: Record<string, any> = {
+    const generateConfig: {
+      responseModalities: string[];
+      imageConfig?: { aspectRatio?: string; imageSize?: string };
+    } = {
       responseModalities: ['TEXT', 'IMAGE'],
     };
 
@@ -141,10 +161,10 @@ export async function generateImage(
     let text = '';
 
     if (response.candidates && response.candidates[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
+      for (const part of response.candidates[0].content.parts as GeminiPart[]) {
         if (part.text) {
           text += part.text;
-        } else if (part.inlineData) {
+        } else if (part.inlineData?.data) {
           const mimeType = part.inlineData.mimeType || 'image/png';
           images.push({
             data: `data:${mimeType};base64,${part.inlineData.data}`,
@@ -167,11 +187,11 @@ export async function generateImage(
       images,
       text,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Gemini] 生成失败:', error);
     return {
       success: false,
-      error: error.message || '生成失败',
+      error: getErrorMessage(error, '生成失败'),
     };
   }
 }
@@ -189,7 +209,7 @@ export async function editImage(
     const ai = new GoogleGenAI({ apiKey });
 
     // 构建内容数组：文本 + 图片
-    const contents: Array<any> = [
+    const contents: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
       { text: prompt },
     ];
 
@@ -205,7 +225,10 @@ export async function editImage(
       });
     }
 
-    const generateConfig: Record<string, any> = {
+    const generateConfig: {
+      responseModalities: string[];
+      imageConfig?: { aspectRatio?: string; imageSize?: string };
+    } = {
       responseModalities: ['TEXT', 'IMAGE'],
     };
 
@@ -230,10 +253,10 @@ export async function editImage(
     let text = '';
 
     if (response.candidates && response.candidates[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
+      for (const part of response.candidates[0].content.parts as GeminiPart[]) {
         if (part.text) {
           text += part.text;
-        } else if (part.inlineData) {
+        } else if (part.inlineData?.data) {
           const mimeType = part.inlineData.mimeType || 'image/png';
           resultImages.push({
             data: `data:${mimeType};base64,${part.inlineData.data}`,
@@ -256,11 +279,11 @@ export async function editImage(
       images: resultImages,
       text,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Gemini] 编辑失败:', error);
     return {
       success: false,
-      error: error.message || '编辑失败',
+      error: getErrorMessage(error, '编辑失败'),
     };
   }
 }

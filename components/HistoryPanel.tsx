@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 
 interface HistoryItem {
     id: string;
@@ -26,7 +26,7 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
     const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
-    const loadHistory = async () => {
+    const loadHistory = useCallback(async () => {
         if (!apiKey) { setError('Set API Key to view history'); return; }
         setLoading(true);
         try {
@@ -36,9 +36,9 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
             else setError(data.error);
         } catch { setError('Connection error'); }
         finally { setLoading(false); }
-    };
+    }, [apiKey]);
 
-    useEffect(() => { if (isOpen) loadHistory(); }, [isOpen, apiKey]);
+    useEffect(() => { if (isOpen) loadHistory(); }, [isOpen, loadHistory]);
 
     const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
@@ -110,6 +110,7 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                     <div className="history-list-grid">
                         {history.map(item => (
                             <div key={item.id} className="history-thumb-card" onClick={() => setSelectedItem(item)}>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                     src={item.thumbnailUrl || item.imageUrl}
                                     alt={item.prompt}
@@ -145,6 +146,7 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                             <button className="modal-close" onClick={() => setSelectedItem(null)}>✕</button>
 
                             <div className="modal-image-container">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={selectedItem.imageUrl} alt={selectedItem.prompt} />
                             </div>
 

@@ -1,6 +1,29 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 
+type GenerateMode = 'text2img' | 'img2img' | 'outpaint';
+
+interface InputImage {
+    data: string;
+    mimeType?: string;
+}
+
+interface GenerateRequestBody {
+    prompt?: string;
+    model?: string;
+    aspectRatio?: string;
+    imageSize?: string;
+    images?: InputImage[];
+    mode?: GenerateMode;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return fallback;
+}
+
 /**
  * POST /api/gemini
  * 
@@ -29,7 +52,7 @@ export async function POST(request: Request) {
             );
         }
 
-        const body = await request.json();
+        const body = await request.json() as GenerateRequestBody;
         const { prompt, model, aspectRatio, imageSize, images, mode = 'text2img' } = body;
 
         if (!prompt || prompt.trim() === '') {
@@ -51,8 +74,15 @@ export async function POST(request: Request) {
         // 检查是否有输入图片（图生图/扩图模式）
         const hasInputImages = images && Array.isArray(images) && images.length > 0;
 
+        if ((mode === 'img2img' || mode === 'outpaint') && !hasInputImages) {
+            return NextResponse.json(
+                { success: false, error: `${mode === 'img2img' ? '图生图' : '扩图'}模式需要提供输入图片` },
+                { status: 400 }
+            );
+        }
+
         // 构建生成配置
-        const generateConfig: Record<string, any> = {
+        const generateConfig: { responseModalities: string[]; imageConfig?: { aspectRatio?: string; imageSize?: string } } = {
             responseModalities: ['TEXT', 'IMAGE'],
         };
 
@@ -82,7 +112,7 @@ export async function POST(request: Request) {
         }
 
         // 构建内容
-        let contents: any;
+        let contents: string | Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
 
         if (mode === 'outpaint' && hasInputImages) {
             // 扩图模式：发送原图 + 描述性提示词
@@ -173,11 +203,11 @@ export async function POST(request: Request) {
             text,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[Gemini API] Error:', error);
 
         // 提取友好的错误信息
-        let errorMessage = error.message || '生成失败';
+        let errorMessage = getErrorMessage(error, '生成失败');
 
         if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('API key not valid')) {
             errorMessage = 'API Key 无效，请检查后重试';
@@ -213,7 +243,7 @@ export async function GET(request: Request) {
         const ai = new GoogleGenAI({ apiKey });
 
         // 发送一个简单的文本请求来验证 API Key
-        const response = await ai.models.generateContent({
+        await ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents: 'Say "OK" if you can read this.',
             config: {
@@ -226,10 +256,10 @@ export async function GET(request: Request) {
             message: 'API Key 验证成功',
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[Gemini API] Test error:', error);
 
-        let errorMessage = error.message || '验证失败';
+        let errorMessage = getErrorMessage(error, '验证失败');
 
         if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('API key not valid')) {
             errorMessage = 'API Key 无效';
