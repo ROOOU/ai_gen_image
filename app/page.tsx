@@ -72,6 +72,14 @@ interface HistoryItem {
     thumbnailUrl?: string;
 }
 
+interface PreviewDetailItem {
+    imageUrl: string;
+    prompt: string;
+    mode: 'text2img' | 'img2img' | 'outpaint';
+    model: string;
+    timestamp: number;
+}
+
 interface OutpaintData {
     originalImage: string;
 }
@@ -104,6 +112,8 @@ export default function Home() {
     const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
     const [outpaintView, setOutpaintView] = useState<'editor' | 'result'>('editor');
     const [selectedCaseFilter, setSelectedCaseFilter] = useState<ExampleCaseFilter>('all');
+    const [latestPreviewMeta, setLatestPreviewMeta] = useState<Omit<PreviewDetailItem, 'imageUrl'> | null>(null);
+    const [previewDetailItem, setPreviewDetailItem] = useState<PreviewDetailItem | null>(null);
 
     const inspirationPrompts = [
         { title: '赛博朋克城市', prompt: 'Cyberpunk city at night, neon lights, rain, futuristic', emoji: '🌃' },
@@ -241,6 +251,12 @@ export default function Home() {
             if (data.success) {
                 setResultImage(data.images[0].data);
                 if (activeMode === 'outpaint') setOutpaintView('result');
+                setLatestPreviewMeta({
+                    prompt: body.prompt,
+                    mode: activeMode,
+                    model: selectedModel,
+                    timestamp: Date.now(),
+                });
                 const thumbnailData = await generateThumbnail(data.images[0].data);
                 try {
                     const historyHeaders: HeadersInit = { 'Content-Type': 'application/json' };
@@ -348,6 +364,65 @@ export default function Home() {
         applyExampleCase(filteredExampleCases[randomIndex]);
     };
 
+    const openPreviewDetail = (item: PreviewDetailItem) => {
+        setPreviewDetailItem(item);
+    };
+
+    const applyPreviewDetail = () => {
+        if (!previewDetailItem) return;
+        setResultImage(previewDetailItem.imageUrl);
+        setPrompt(previewDetailItem.prompt);
+        setActiveMode(previewDetailItem.mode);
+        setActiveTab('generate');
+        setPreviewDetailItem(null);
+    };
+
+    const renderPreviewContent = () => {
+        if (isGenerating) {
+            return (
+                <div className="generating-view">
+                    <div className="progress-circle">
+                        <svg viewBox="0 0 100 100"><circle className="circle-bg" cx="50" cy="50" r="45" /><circle className="circle-progress" cx="50" cy="50" r="45" style={{ strokeDasharray: 283, strokeDashoffset: 283 * (1 - generationProgress / 100) }} /></svg>
+                        <span className="progress-value">{Math.round(generationProgress)}%</span>
+                    </div>
+                    <p>创作中...</p>
+                </div>
+            );
+        }
+
+        if (resultImage) {
+            const previewMeta = latestPreviewMeta || {
+                prompt,
+                mode: activeMode,
+                model: selectedModel,
+                timestamp: Date.now(),
+            };
+
+            return (
+                <div className="result-view">
+                    <div
+                        className="result-image-container preview-clickable"
+                        onClick={() => openPreviewDetail({ imageUrl: resultImage, ...previewMeta })}
+                    >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={resultImage} alt="Generated" />
+                    </div>
+                    <div className="result-toolbar">
+                        <button className="toolbar-btn primary" onClick={handleDownload}>下载</button>
+                        <button className="toolbar-btn" onClick={handleCopy}>复制</button>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="empty-view">
+                <div className="empty-illustration"><span className="empty-emoji">🎨</span></div>
+                <p>{getModeDescription()}</p>
+            </div>
+        );
+    };
+
     return (
         <div className="app-container">
             <header className="app-header">
@@ -425,6 +500,9 @@ export default function Home() {
                         </div>
 
                         <div className={`generate-layout ${activeMode === 'outpaint' ? 'outpaint-mobile-layout' : ''}`}>
+                        <div className={`mobile-preview ${activeMode !== 'outpaint' ? 'active' : ''}`}>
+                            {renderPreviewContent()}
+                        </div>
                         <aside className="controls-panel">
                             <div className="control-section mode-control-section">
                                 <label className="control-label">任务</label>
@@ -599,31 +677,7 @@ export default function Home() {
                                 />
                             ) : (
                                 <div className="desktop-preview" style={{ flex: 1, margin: 0 }}>
-                                    {isGenerating ? (
-                                        <div className="generating-view">
-                                            <div className="progress-circle">
-                                                <svg viewBox="0 0 100 100"><circle className="circle-bg" cx="50" cy="50" r="45" /><circle className="circle-progress" cx="50" cy="50" r="45" style={{ strokeDasharray: 283, strokeDashoffset: 283 * (1 - generationProgress / 100) }} /></svg>
-                                                <span className="progress-value">{Math.round(generationProgress)}%</span>
-                                            </div>
-                                            <p>创作中...</p>
-                                        </div>
-                                    ) : resultImage ? (
-                                        <div className="result-view">
-                                            <div className="result-image-container">
-                                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                <img src={resultImage} alt="Generated" />
-                                            </div>
-                                            <div className="result-toolbar">
-                                                <button className="toolbar-btn primary" onClick={handleDownload}>下载</button>
-                                                <button className="toolbar-btn" onClick={handleCopy}>复制</button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="empty-view">
-                                            <div className="empty-illustration"><span className="empty-emoji">🎨</span></div>
-                                            <p>{getModeDescription()}</p>
-                                        </div>
-                                    )}
+                                    {renderPreviewContent()}
                                 </div>
                             )}
                         </div>
@@ -645,9 +699,13 @@ export default function Home() {
                                                     key={item.id}
                                                     className="history-item"
                                                     onClick={() => {
-                                                        setResultImage(item.imageUrl);
-                                                        setPrompt(item.prompt);
-                                                        setActiveTab('generate');
+                                                        openPreviewDetail({
+                                                            imageUrl: item.imageUrl,
+                                                            prompt: item.prompt,
+                                                            mode: item.mode,
+                                                            model: item.model,
+                                                            timestamp: item.timestamp,
+                                                        });
                                                     }}
                                                 >
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -723,6 +781,29 @@ export default function Home() {
                     </div>
                 )}
             </main>
+
+            {previewDetailItem && (
+                <div className="preview-detail-overlay" onClick={() => setPreviewDetailItem(null)}>
+                    <div className="preview-detail-modal" onClick={(e) => e.stopPropagation()}>
+                        <button className="preview-detail-close" onClick={() => setPreviewDetailItem(null)}>✕</button>
+                        <div className="preview-detail-image-wrap">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={previewDetailItem.imageUrl} alt="preview" />
+                        </div>
+                        <div className="preview-detail-body">
+                            <div className="preview-detail-meta">
+                                <span>{getModeLabel(previewDetailItem.mode)}</span>
+                                <span>{new Date(previewDetailItem.timestamp).toLocaleString('zh-CN')}</span>
+                            </div>
+                            <p className="preview-detail-prompt">{previewDetailItem.prompt}</p>
+                            <div className="preview-detail-actions">
+                                <button className="toolbar-btn primary" onClick={applyPreviewDetail}>应用到创作</button>
+                                <button className="toolbar-btn" onClick={() => setPreviewDetailItem(null)}>关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
