@@ -10,6 +10,7 @@ interface HistoryItem {
     model: string;
     imageUrl: string;
     thumbnailUrl?: string;
+    inputImageUrl?: string;
 }
 
 interface HistoryPanelProps {
@@ -147,7 +148,14 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
 
                             <div className="modal-image-container">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={selectedItem.imageUrl} alt={selectedItem.prompt} />
+                                <img className="main-result-image" src={selectedItem.imageUrl} alt={selectedItem.prompt} />
+                                {selectedItem.inputImageUrl && (
+                                    <div className="reference-image-overlay">
+                                        <span className="reference-label">参考图</span>
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={selectedItem.inputImageUrl} alt="参考图" />
+                                    </div>
+                                )}
                             </div>
 
                             <div className="modal-info">
@@ -334,12 +342,44 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                     background: #0a0a0a;
                     padding: 20px;
                     max-height: 60vh;
+                    position: relative;
                 }
-                .modal-image-container img {
+                .modal-image-container .main-result-image {
                     max-width: 100%;
                     max-height: 50vh;
                     object-fit: contain;
                     border-radius: 8px;
+                }
+                .reference-image-overlay {
+                    position: absolute;
+                    top: 20px;
+                    left: 20px;
+                    width: 120px;
+                    background: rgba(0, 0, 0, 0.6);
+                    border-radius: 8px;
+                    padding: 4px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                    border: 1px solid rgba(255,255,255,0.1);
+                    backdrop-filter: blur(4px);
+                    transition: transform 0.2s;
+                    z-index: 10;
+                }
+                .reference-image-overlay:hover {
+                    transform: scale(1.05);
+                }
+                .reference-label {
+                    display: block;
+                    font-size: 10px;
+                    color: rgba(255,255,255,0.8);
+                    margin-bottom: 4px;
+                    text-align: center;
+                    font-weight: 500;
+                }
+                .reference-image-overlay img {
+                    width: 100%;
+                    height: auto;
+                    object-fit: contain;
+                    border-radius: 4px;
                 }
                 .modal-info {
                     padding: 20px;
