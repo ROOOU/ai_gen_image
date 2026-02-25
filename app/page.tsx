@@ -119,7 +119,7 @@ export default function Home() {
     const [error, setError] = useState<string | null>(null);
     const [activeMode, setActiveMode] = useState<'text2img' | 'img2img' | 'outpaint'>('text2img');
     const [outpaintData, setOutpaintData] = useState<OutpaintData | null>(null);
-    const [referenceImage, setReferenceImage] = useState<{ data: string; mimeType: string } | null>(null);
+    const [referenceImages, setReferenceImages] = useState<Array<{ data: string; mimeType: string }>>([]);
     const [generationProgress, setGenerationProgress] = useState(0);
     const [showInspiration, setShowInspiration] = useState(false);
     const [isServerKeyConfigured, setIsServerKeyConfigured] = useState(false);
@@ -186,7 +186,7 @@ export default function Home() {
             return;
         }
 
-        if (activeMode === 'img2img' && !referenceImage?.data) {
+        if (activeMode === 'img2img' && referenceImages.length === 0) {
             setError('图生图模式请先上传参考图片');
             return;
         }
@@ -238,11 +238,9 @@ export default function Home() {
                     { data: compressedComposite, mimeType: 'image/jpeg' },
                     { data: outpaintData.maskImage, mimeType: 'image/png' },
                 ];
-            } else if (activeMode === 'img2img' && referenceImage?.data) {
+            } else if (activeMode === 'img2img' && referenceImages.length > 0) {
                 body.mode = 'img2img';
-                body.images = [
-                    { data: referenceImage.data, mimeType: referenceImage.mimeType },
-                ];
+                body.images = referenceImages.map(img => ({ data: img.data, mimeType: img.mimeType }));
             } else {
                 body.mode = 'text2img';
             }
@@ -281,10 +279,10 @@ export default function Home() {
                     }
 
                     const historyInputImageData = activeMode === 'img2img'
-                        ? referenceImage?.data
+                        ? referenceImages[0]?.data
                         : (activeMode === 'outpaint' ? outpaintData?.originalImage : undefined);
                     const historyInputImageMimeType = activeMode === 'img2img'
-                        ? referenceImage?.mimeType
+                        ? referenceImages[0]?.mimeType
                         : 'image/jpeg';
 
                     await fetch('/api/history', {
@@ -615,8 +613,8 @@ export default function Home() {
                                     <div className="control-section">
                                         <label className="control-label">输入图片</label>
                                         <ImageToImageUploader
-                                            onImageReady={setReferenceImage}
-                                            currentImage={referenceImage?.data}
+                                            onImagesReady={setReferenceImages}
+                                            currentImages={referenceImages}
                                         />
                                     </div>
                                 )}
