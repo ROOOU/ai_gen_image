@@ -102,25 +102,18 @@ export async function POST(request: Request) {
 
         // 设置图片配置
         if (!hasInputImages) {
-            // 纯文生图模式：使用 aspectRatio 和 imageSize
-            if (aspectRatio || imageSize) {
-                generateConfig.imageConfig = {};
-                if (aspectRatio) {
-                    generateConfig.imageConfig.aspectRatio = aspectRatio;
-                }
-                if (imageSize && model === 'gemini-3-pro-image-preview') {
-                    generateConfig.imageConfig.imageSize = imageSize;
-                }
+            // 纯文生图模式：支持 aspectRatio 和 imageSize
+            const imageConfigParams: { aspectRatio?: string; imageSize?: string } = {};
+            if (aspectRatio) imageConfigParams.aspectRatio = aspectRatio;
+            if (imageSize && model === 'gemini-3-pro-image-preview') imageConfigParams.imageSize = imageSize;
+            if (Object.keys(imageConfigParams).length > 0) {
+                generateConfig.imageConfig = imageConfigParams;
             }
         } else {
-            // 图生图/扩图模式
-            generateConfig.imageConfig = {};
-            if (aspectRatio) {
-                generateConfig.imageConfig.aspectRatio = aspectRatio;
-            }
-            // imageSize 仅 gemini-3-pro-image-preview 支持（包括图生图模式）
+            // 图生图/扩图模式：Gemini API 不支持 aspectRatio，只允许 imageSize（Pro 模型）
+            // 传入 aspectRatio 会导致 "The string did not match the expected pattern" 错误
             if (imageSize && model === 'gemini-3-pro-image-preview') {
-                generateConfig.imageConfig.imageSize = imageSize;
+                generateConfig.imageConfig = { imageSize };
             }
         }
 
