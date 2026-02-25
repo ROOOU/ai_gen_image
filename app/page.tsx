@@ -52,10 +52,7 @@ function compressImage(dataUrl: string, maxDimension = 1024, quality = 0.8): Pro
 }
 
 
-const MODELS = [
-    { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: '快速高效' },
-    { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: '专业品质' },
-];
+const MODEL_ID = 'gemini-3-pro-image-preview';
 
 const RESOLUTIONS = [
     { id: '1K', name: '1K' },
@@ -111,7 +108,6 @@ export default function Home() {
     const [activeTab, setActiveTab] = useState<'generate' | 'history' | 'settings'>('generate');
     const [apiKey, setApiKey] = useState('');
     const [prompt, setPrompt] = useState('');
-    const [selectedModel, setSelectedModel] = useState(MODELS[1].id);
     const [selectedRatio, setSelectedRatio] = useState('auto');
     const [selectedResolution, setSelectedResolution] = useState('2K');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -220,14 +216,14 @@ export default function Home() {
 
         try {
             const body: GenerateRequestBody = {
-                model: selectedModel,
+                model: MODEL_ID,
                 prompt: finalPrompt,
                 mode: 'text2img',
             };
 
             if (selectedRatio && selectedRatio !== 'auto') body.aspectRatio = selectedRatio;
 
-            if (selectedModel === 'gemini-3-pro-image-preview' && selectedResolution) {
+            if (selectedResolution) {
                 body.imageSize = selectedResolution;
             }
 
@@ -274,7 +270,7 @@ export default function Home() {
                 setLatestPreviewMeta({
                     prompt: body.prompt,
                     mode: activeMode,
-                    model: selectedModel,
+                    model: MODEL_ID,
                     timestamp: Date.now(),
                 });
                 const thumbnailData = await generateThumbnail(finalImage);
@@ -294,7 +290,7 @@ export default function Home() {
                             thumbnailData,
                             prompt: body.prompt,
                             mode: activeMode,
-                            model: selectedModel,
+                            model: MODEL_ID,
                             inputImagesData: activeMode === 'img2img'
                                 ? referenceImages.map(img => img.data)
                                 : (activeMode === 'outpaint' && outpaintData?.originalImage
@@ -422,7 +418,7 @@ export default function Home() {
             const previewMeta = latestPreviewMeta || {
                 prompt,
                 mode: activeMode,
-                model: selectedModel,
+                model: MODEL_ID,
                 timestamp: Date.now(),
             };
 
@@ -559,26 +555,6 @@ export default function Home() {
                                     </div>
                                 </div>
 
-                                <div className="control-section">
-                                    <label className="control-label">模型</label>
-                                    <div className="prompt-box" style={{ padding: '4px 8px' }}>
-                                        <select
-                                            value={selectedModel}
-                                            onChange={(e) => setSelectedModel(e.target.value)}
-                                            style={{
-                                                width: '100%',
-                                                background: 'transparent',
-                                                border: 'none',
-                                                color: 'var(--text-primary)',
-                                                padding: '8px 4px',
-                                                outline: 'none',
-                                                fontSize: '14px'
-                                            }}
-                                        >
-                                            {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
 
                                 {activeMode !== 'outpaint' && (
                                     <div className="control-section">
@@ -597,22 +573,20 @@ export default function Home() {
                                     </div>
                                 )}
 
-                                {selectedModel === 'gemini-3-pro-image-preview' && (
-                                    <div className="control-section">
-                                        <label className="control-label">分辨率</label>
-                                        <div className="resolution-options">
-                                            {RESOLUTIONS.map(r => (
-                                                <button
-                                                    key={r.id}
-                                                    className={`resolution-option ${selectedResolution === r.id ? 'active' : ''}`}
-                                                    onClick={() => setSelectedResolution(r.id)}
-                                                >
-                                                    {r.name}
-                                                </button>
-                                            ))}
-                                        </div>
+                                <div className="control-section">
+                                    <label className="control-label">分辨率</label>
+                                    <div className="resolution-options">
+                                        {RESOLUTIONS.map(r => (
+                                            <button
+                                                key={r.id}
+                                                className={`resolution-option ${selectedResolution === r.id ? 'active' : ''}`}
+                                                onClick={() => setSelectedResolution(r.id)}
+                                            >
+                                                {r.name}
+                                            </button>
+                                        ))}
                                     </div>
-                                )}
+                                </div>
 
                                 {activeMode === 'img2img' && (
                                     <div className="control-section">
@@ -620,7 +594,7 @@ export default function Home() {
                                         <ImageToImageUploader
                                             onImagesReady={setReferenceImages}
                                             currentImages={referenceImages}
-                                            maxImages={selectedModel === 'gemini-3-pro-image-preview' ? 14 : 3}
+                                            maxImages={14}
                                         />
                                     </div>
                                 )}

@@ -74,12 +74,8 @@ export async function POST(request: Request) {
         // 检查是否有输入图片（图生图/扩图模式）
         const hasInputImages = images && Array.isArray(images) && images.length > 0;
 
-        // 各模型的最大输入图片数量限制（来自官方文档）
-        const MAX_IMAGES: Record<string, number> = {
-            'gemini-2.5-flash-image': 3,
-            'gemini-3-pro-image-preview': 14,
-        };
-        const maxImages = MAX_IMAGES[model] ?? 3;
+        // Pro 模型最大输入图片数量限制
+        const maxImages = 14;
 
         if (hasInputImages && mode === 'img2img' && images!.length > maxImages) {
             return NextResponse.json(
@@ -105,14 +101,13 @@ export async function POST(request: Request) {
             // 纯文生图模式：支持 aspectRatio 和 imageSize
             const imageConfigParams: { aspectRatio?: string; imageSize?: string } = {};
             if (aspectRatio) imageConfigParams.aspectRatio = aspectRatio;
-            if (imageSize && model === 'gemini-3-pro-image-preview') imageConfigParams.imageSize = imageSize;
+            if (imageSize) imageConfigParams.imageSize = imageSize;
             if (Object.keys(imageConfigParams).length > 0) {
                 generateConfig.imageConfig = imageConfigParams;
             }
         } else {
-            // 图生图/扩图模式：Gemini API 不支持 aspectRatio，只允许 imageSize（Pro 模型）
-            // 传入 aspectRatio 会导致 "The string did not match the expected pattern" 错误
-            if (imageSize && model === 'gemini-3-pro-image-preview') {
+            // 图生图/扩图模式：Gemini API 不支持 aspectRatio，只允许 imageSize
+            if (imageSize) {
                 generateConfig.imageConfig = { imageSize };
             }
         }
@@ -246,7 +241,7 @@ export async function GET(request: Request) {
 
         // 发送一个简单的文本请求来验证 API Key
         await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: 'gemini-3-pro-image-preview',
             contents: 'Say "OK" if you can read this.',
             config: {
                 responseModalities: ['TEXT'],

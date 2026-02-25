@@ -1,7 +1,7 @@
 /**
  * Gemini Nano Banana API Client
  * 
- * 支持 Nano Banana (gemini-2.5-flash-image) 和 Nano Banana Pro (gemini-3-pro-image-preview)
+ * 使用 Nano Banana Pro (gemini-3-pro-image-preview)
  * 
  * 文档: https://ai.google.dev/gemini-api/docs/image-generation
  */
@@ -27,12 +27,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 // 可用模型
 export const GEMINI_MODELS = [
-  {
-    id: 'gemini-2.5-flash-image',
-    name: 'Nano Banana',
-    description: '快速高效，适合批量生成',
-    supports4K: false,
-  },
   {
     id: 'gemini-3-pro-image-preview',
     name: 'Nano Banana Pro',
@@ -103,7 +97,7 @@ export async function testConnection(apiKey: string): Promise<{ success: boolean
 
     // 尝试列出模型来验证 API Key
     await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-pro-image-preview',
       contents: 'test',
       config: {
         responseModalities: ['TEXT'],
