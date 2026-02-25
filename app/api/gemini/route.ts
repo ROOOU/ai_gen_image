@@ -96,21 +96,16 @@ export async function POST(request: Request) {
             responseModalities: ['TEXT', 'IMAGE'],
         };
 
-        // 设置图片配置
+        // 设置图片配置（仅文生图模式支持 imageConfig，图生图/扩图模式不支持任何 imageConfig 参数）
         if (!hasInputImages) {
-            // 纯文生图模式：支持 aspectRatio 和 imageSize
             const imageConfigParams: { aspectRatio?: string; imageSize?: string } = {};
             if (aspectRatio) imageConfigParams.aspectRatio = aspectRatio;
             if (imageSize) imageConfigParams.imageSize = imageSize;
             if (Object.keys(imageConfigParams).length > 0) {
                 generateConfig.imageConfig = imageConfigParams;
             }
-        } else {
-            // 图生图/扩图模式：Gemini API 不支持 aspectRatio，只允许 imageSize
-            if (imageSize) {
-                generateConfig.imageConfig = { imageSize };
-            }
         }
+        // 图生图/扩图模式：不传任何 imageConfig，Gemini 编辑 API 不支持该参数
 
         // 构建内容
         let contents: string | Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
