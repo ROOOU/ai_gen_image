@@ -51,6 +51,7 @@ function compressImage(dataUrl: string, maxDimension = 1024, quality = 0.8): Pro
     });
 }
 
+
 const MODELS = [
     { id: 'gemini-2.5-flash-image', name: 'Nano Flash', description: '快速高效' },
     { id: 'gemini-3-pro-image-preview', name: 'Nano Pro', description: '专业品质' },
@@ -92,6 +93,8 @@ interface PreviewDetailItem {
 
 interface OutpaintData {
     originalImage: string;
+    compositeImage: string;
+    maskImage: string;
 }
 
 interface GenerateRequestBody {
@@ -229,10 +232,11 @@ export default function Home() {
 
             if (activeMode === 'outpaint' && outpaintData) {
                 body.mode = 'outpaint';
-                // 压缩原始图片以避免超出 Vercel body 大小限制
-                const compressedImage = await compressImage(outpaintData.originalImage, 1024, 0.8);
+                // 发送合成图 + mask 图给 Gemini，提供 masked outpainting 上下文
+                const compressedComposite = await compressImage(outpaintData.compositeImage, 1024, 0.8);
                 body.images = [
-                    { data: compressedImage, mimeType: 'image/jpeg' },
+                    { data: compressedComposite, mimeType: 'image/jpeg' },
+                    { data: outpaintData.maskImage, mimeType: 'image/png' },
                 ];
             } else if (activeMode === 'img2img' && referenceImage?.data) {
                 body.mode = 'img2img';
@@ -259,7 +263,9 @@ export default function Home() {
             setGenerationProgress(100);
 
             if (data.success) {
-                setResultImage(data.images[0].data);
+                const finalImage = data.images[0].data;
+
+                setResultImage(finalImage);
                 if (activeMode === 'outpaint') setOutpaintView('result');
                 setLatestPreviewMeta({
                     prompt: body.prompt,
@@ -267,7 +273,7 @@ export default function Home() {
                     model: selectedModel,
                     timestamp: Date.now(),
                 });
-                const thumbnailData = await generateThumbnail(data.images[0].data);
+                const thumbnailData = await generateThumbnail(finalImage);
                 try {
                     const historyHeaders: HeadersInit = { 'Content-Type': 'application/json' };
                     if (apiKey) {
@@ -285,7 +291,7 @@ export default function Home() {
                         method: 'POST',
                         headers: historyHeaders,
                         body: JSON.stringify({
-                            imageData: data.images[0].data,
+                            imageData: finalImage,
                             thumbnailData,
                             prompt: body.prompt,
                             mode: activeMode,
@@ -707,7 +713,11 @@ export default function Home() {
 
                                 {activeMode === 'outpaint' && outpaintView === 'editor' ? (
                                     <OutpaintEditor
-                                        onCompositeReady={setOutpaintData}
+                                        onCompositeReady={(data) => setOutpaintData({
+                                            originalImage: data.originalImage,
+                                            compositeImage: data.compositeImage,
+                                            maskImage: data.maskImage,
+                                        })}
                                         aspectRatio={selectedRatio}
                                         onAspectRatioChange={setSelectedRatio}
                                     />

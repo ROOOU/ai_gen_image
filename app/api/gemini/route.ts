@@ -101,26 +101,18 @@ export async function POST(request: Request) {
         } else {
             // 图生图/扩图模式
             generateConfig.imageConfig = {};
-
-            // 如果指定了比例，则应用
             if (aspectRatio) {
                 generateConfig.imageConfig.aspectRatio = aspectRatio;
             }
-
-            // 注意: imageSize 仅在纯文生图模式使用
-            // 图生图/扩图模式下 Gemini API 不支持 imageSize 参数
         }
 
         // 构建内容
         let contents: string | Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
 
         if (mode === 'outpaint' && hasInputImages) {
-            // 扩图模式：发送原图 + 描述性提示词
-            // Gemini 使用 aspectRatio 配置来决定输出尺寸，
-            // 并根据提示词自然延展图片内容
-
-            // images[0] = 原始图片
-            const originalBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
+            // 扩图模式：发送合成图（原图已放在画布上）给 Gemini
+            // Gemini 会理解画面构图并生成扩展内容
+            const compositeBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
 
             contents = [
                 {
@@ -129,7 +121,7 @@ export async function POST(request: Request) {
                 {
                     inlineData: {
                         mimeType: images[0].mimeType || 'image/jpeg',
-                        data: originalBase64,
+                        data: compositeBase64,
                     },
                 },
             ];
@@ -137,14 +129,13 @@ export async function POST(request: Request) {
             console.log('[Gemini API] Outpainting mode:', {
                 model,
                 promptLength: prompt.length,
-                originalImageSize: originalBase64.length,
-                aspectRatio,
+                compositeImageSize: compositeBase64.length,
             });
         } else if (hasInputImages) {
             // 普通图生图模式
             contents = [{ text: prompt }];
 
-            for (const img of images) {
+            for (const img of images!) {
                 const base64Data = img.data.replace(/^data:[^;]+;base64,/, '');
                 contents.push({
                     inlineData: {

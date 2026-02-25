@@ -120,8 +120,39 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Gray background for AI
-        ctx.fillStyle = '#808080';
+        // 采样图片边缘像素色彩，作为画布背景色
+        const sampleCanvas = document.createElement('canvas');
+        sampleCanvas.width = originalImage.width;
+        sampleCanvas.height = originalImage.height;
+        const sampleCtx = sampleCanvas.getContext('2d');
+        let bgColor = '#808080';
+        if (sampleCtx) {
+            sampleCtx.drawImage(originalImage, 0, 0);
+            const edgePixels: number[][] = [];
+            const w = originalImage.width;
+            const h = originalImage.height;
+            // 采样四边的像素
+            for (let x = 0; x < w; x += Math.max(1, Math.floor(w / 20))) {
+                const topP = sampleCtx.getImageData(x, 0, 1, 1).data;
+                edgePixels.push([topP[0], topP[1], topP[2]]);
+                const botP = sampleCtx.getImageData(x, h - 1, 1, 1).data;
+                edgePixels.push([botP[0], botP[1], botP[2]]);
+            }
+            for (let y = 0; y < h; y += Math.max(1, Math.floor(h / 20))) {
+                const leftP = sampleCtx.getImageData(0, y, 1, 1).data;
+                edgePixels.push([leftP[0], leftP[1], leftP[2]]);
+                const rightP = sampleCtx.getImageData(w - 1, y, 1, 1).data;
+                edgePixels.push([rightP[0], rightP[1], rightP[2]]);
+            }
+            if (edgePixels.length > 0) {
+                const avg = edgePixels.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1], acc[2] + p[2]], [0, 0, 0]);
+                const r = Math.round(avg[0] / edgePixels.length);
+                const g = Math.round(avg[1] / edgePixels.length);
+                const b = Math.round(avg[2] / edgePixels.length);
+                bgColor = `rgb(${r},${g},${b})`;
+            }
+        }
+        ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
         const drawW = originalImage.width * imageScale;
