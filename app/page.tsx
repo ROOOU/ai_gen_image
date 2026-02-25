@@ -240,7 +240,12 @@ export default function Home() {
                 ];
             } else if (activeMode === 'img2img' && referenceImages.length > 0) {
                 body.mode = 'img2img';
-                body.images = referenceImages.map(img => ({ data: img.data, mimeType: img.mimeType }));
+                body.images = await Promise.all(
+                    referenceImages.map(async img => {
+                        const compressed = await compressImage(img.data, 1024, 0.8);
+                        return { data: compressed, mimeType: 'image/jpeg' };
+                    })
+                );
             } else {
                 body.mode = 'text2img';
             }
