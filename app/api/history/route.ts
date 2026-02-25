@@ -16,8 +16,9 @@ import {
 interface CreateHistoryRequestBody {
     imageData?: string;
     thumbnailData?: string;
-    inputImageData?: string;
+    inputImageData?: string;          // 旧版单图兼容
     inputImageMimeType?: string;
+    inputImagesData?: string[];       // 多图
     prompt?: string;
     mode?: 'text2img' | 'img2img' | 'outpaint';
     model?: string;
@@ -57,13 +58,16 @@ export async function GET(request: Request) {
         const history = await loadHistory(userId);
         console.log('[History API] GET - Loaded history items:', history.length);
 
-        // 为每个记录添加图片 URL 和缩略图 URL
-        const historyWithUrls = history.map(item => ({
-            ...item,
-            imageUrl: getImageUrl(item.imageKey),
-            thumbnailUrl: getThumbnailUrl(item.imageKey),
-            inputImageUrl: item.inputImageKey ? getImageUrl(item.inputImageKey) : undefined,
-        }));
+        // 为每个记录添加图片 URL 和缩略图 URL（兼容旧版单图 + 新版多图）
+        const historyWithUrls = history.map(item => {
+            const allInputKeys = item.inputImageKeys || (item.inputImageKey ? [item.inputImageKey] : []);
+            return {
+                ...item,
+                imageUrl: getImageUrl(item.imageKey),
+                thumbnailUrl: getThumbnailUrl(item.imageKey),
+                inputImageUrls: allInputKeys.map((k: string) => getImageUrl(k)),
+            };
+        });
 
         return NextResponse.json({
             success: true,
@@ -114,6 +118,7 @@ export async function POST(request: Request) {
             thumbnailData,
             inputImageData,
             inputImageMimeType,
+            inputImagesData,
             prompt,
             mode,
             model,
@@ -148,21 +153,26 @@ export async function POST(request: Request) {
             }
         }
 
-        // 图生图/扩图输入图按内容哈希去重存储
-        let inputImageKey: string | undefined;
-        let inputImageHash: string | undefined;
-        if (inputImageData && (mode === 'img2img' || mode === 'outpaint')) {
-            try {
-                const dedupResult = await uploadInputImageWithDedup(inputImageData, userId, inputImageMimeType || 'image/jpeg');
-                inputImageKey = dedupResult.imageKey;
-                inputImageHash = dedupResult.imageHash;
-                console.log('[History API] POST - Input image stored:', {
-                    reused: dedupResult.reused,
-                    imageHash: dedupResult.imageHash,
-                });
-            } catch (err) {
-                console.error('[History API] POST - Input image store failed:', err);
-                // 输入图存储失败不影响主流程
+        // 图生图/扩图输入图按内容哈希去重存储（支持多图）
+        const inputImageKeys: string[] = [];
+        const inputImageHashes: string[] = [];
+        if ((mode === 'img2img' || mode === 'outpaint')) {
+            // 多图模式
+            const imagesToUpload = inputImagesData && inputImagesData.length > 0
+                ? inputImagesData
+                : (inputImageData ? [inputImageData] : []);
+
+            for (const imgData of imagesToUpload) {
+                try {
+                    const dedupResult = await uploadInputImageWithDedup(imgData, userId, inputImageMimeType || 'image/jpeg');
+                    inputImageKeys.push(dedupResult.imageKey);
+                    inputImageHashes.push(dedupResult.imageHash);
+                } catch (err) {
+                    console.error('[History API] POST - Input image store failed:', err);
+                }
+            }
+            if (inputImageKeys.length > 0) {
+                console.log('[History API] POST - Input images stored:', inputImageKeys.length);
             }
         }
 
@@ -175,8 +185,10 @@ export async function POST(request: Request) {
             model: model || 'unknown',
             imageKey,
             aspectRatio,
-            inputImageKey,
-            inputImageHash,
+            inputImageKey: inputImageKeys[0],
+            inputImageHash: inputImageHashes[0],
+            inputImageKeys: inputImageKeys.length > 0 ? inputImageKeys : undefined,
+            inputImageHashes: inputImageHashes.length > 0 ? inputImageHashes : undefined,
         };
 
         // 保存到用户的历史记录
@@ -190,7 +202,7 @@ export async function POST(request: Request) {
                 item: {
                     ...historyItem,
                     imageUrl: getImageUrl(imageKey),
-                    inputImageUrl: inputImageKey ? getImageUrl(inputImageKey) : undefined,
+                    inputImageUrls: inputImageKeys.map(k => getImageUrl(k)),
                 },
             });
         } else {

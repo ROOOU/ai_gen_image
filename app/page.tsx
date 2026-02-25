@@ -79,7 +79,7 @@ interface HistoryItem {
     model: string;
     imageUrl: string;
     thumbnailUrl?: string;
-    inputImageUrl?: string;
+    inputImageUrls?: string[];
 }
 
 interface PreviewDetailItem {
@@ -88,7 +88,7 @@ interface PreviewDetailItem {
     mode: 'text2img' | 'img2img' | 'outpaint';
     model: string;
     timestamp: number;
-    inputImageUrl?: string;
+    inputImageUrls?: string[];
 }
 
 interface OutpaintData {
@@ -283,12 +283,7 @@ export default function Home() {
                         historyHeaders['x-api-key'] = apiKey;
                     }
 
-                    const historyInputImageData = activeMode === 'img2img'
-                        ? referenceImages[0]?.data
-                        : (activeMode === 'outpaint' ? outpaintData?.originalImage : undefined);
-                    const historyInputImageMimeType = activeMode === 'img2img'
-                        ? referenceImages[0]?.mimeType
-                        : 'image/jpeg';
+
 
                     await fetch('/api/history', {
                         method: 'POST',
@@ -299,8 +294,12 @@ export default function Home() {
                             prompt: body.prompt,
                             mode: activeMode,
                             model: selectedModel,
-                            inputImageData: historyInputImageData,
-                            inputImageMimeType: historyInputImageMimeType,
+                            inputImagesData: activeMode === 'img2img'
+                                ? referenceImages.map(img => img.data)
+                                : (activeMode === 'outpaint' && outpaintData?.originalImage
+                                    ? [outpaintData.originalImage]
+                                    : undefined),
+                            inputImageMimeType: 'image/jpeg',
                         }),
                     });
                 } catch (e) {
@@ -755,17 +754,15 @@ export default function Home() {
                                                             mode: item.mode,
                                                             model: item.model,
                                                             timestamp: item.timestamp,
-                                                            inputImageUrl: item.inputImageUrl,
+                                                            inputImageUrls: item.inputImageUrls,
                                                         });
                                                     }}
                                                 >
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                                     <img src={item.thumbnailUrl || item.imageUrl} alt="" loading="lazy" />
-                                                    {item.inputImageUrl && (
-                                                        <div className="history-input-preview" title="此记录包含参考图">
-                                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                            <img src={item.inputImageUrl} alt="reference" loading="lazy" />
-                                                            <span>参考图</span>
+                                                    {item.inputImageUrls && item.inputImageUrls.length > 0 && (
+                                                        <div className="history-input-badge" title="此记录包含参考图">
+                                                            <span>参考×{item.inputImageUrls.length}</span>
                                                         </div>
                                                     )}
                                                     <div className="history-overlay">
@@ -848,11 +845,15 @@ export default function Home() {
                             <div className="preview-image-tight-container">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={previewDetailItem.imageUrl} alt="preview" />
-                                {previewDetailItem.inputImageUrl && (
-                                    <div className="reference-image-overlay">
-                                        <span className="reference-label">参考图</span>
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={previewDetailItem.inputImageUrl} alt="参考图" />
+                                {previewDetailItem.inputImageUrls && previewDetailItem.inputImageUrls.length > 0 && (
+                                    <div style={{ marginTop: 12 }}>
+                                        <span style={{ fontSize: 12, color: 'var(--pro-text-dim)', marginBottom: 6, display: 'block' }}>参考图 ({previewDetailItem.inputImageUrls.length})</span>
+                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                            {previewDetailItem.inputImageUrls.map((url, i) => (
+                                                /* eslint-disable-next-line @next/next/no-img-element */
+                                                <img key={i} src={url} alt={`参考图 ${i + 1}`} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--pro-border)' }} />
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>

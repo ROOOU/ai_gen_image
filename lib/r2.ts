@@ -31,8 +31,10 @@ export interface HistoryItem {
     model: string;
     imageKey: string;      // R2 中的图片 key
     aspectRatio?: string;
-    inputImageKey?: string;
+    inputImageKey?: string;       // 单张（旧版兼容）
     inputImageHash?: string;
+    inputImageKeys?: string[];    // 多张参考图
+    inputImageHashes?: string[];
 }
 
 interface ParsedImageData {

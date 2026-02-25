@@ -10,7 +10,7 @@ interface HistoryItem {
     model: string;
     imageUrl: string;
     thumbnailUrl?: string;
-    inputImageUrl?: string;
+    inputImageUrls?: string[];
 }
 
 interface HistoryPanelProps {
@@ -150,11 +150,15 @@ export default function HistoryPanel({ isOpen, onClose, onSelectItem, apiKey }: 
                                 <div className="preview-image-tight-container">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img className="main-result-image" src={selectedItem.imageUrl} alt={selectedItem.prompt} />
-                                    {selectedItem.inputImageUrl && (
-                                        <div className="reference-image-overlay">
-                                            <span className="reference-label">参考图</span>
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img src={selectedItem.inputImageUrl} alt="参考图" />
+                                    {selectedItem.inputImageUrls && selectedItem.inputImageUrls.length > 0 && (
+                                        <div style={{ marginTop: 12 }}>
+                                            <span style={{ fontSize: 12, color: 'var(--pro-text-dim)', marginBottom: 6, display: 'block' }}>参考图 ({selectedItem.inputImageUrls.length})</span>
+                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                {selectedItem.inputImageUrls.map((url, i) => (
+                                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                                    <img key={i} src={url} alt={`参考图 ${i + 1}`} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--pro-border)' }} />
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
