@@ -11,50 +11,68 @@ interface ImageItem {
 interface ImageToImageUploaderProps {
     onImagesReady: (images: Array<{ data: string; mimeType: string }>) => void;
     currentImages?: Array<{ data: string; mimeType: string }>;
+    maxImages?: number;
 }
 
-export default function ImageToImageUploader({ onImagesReady, currentImages = [] }: ImageToImageUploaderProps) {
+export default function ImageToImageUploader({ onImagesReady, currentImages = [], maxImages = 3 }: ImageToImageUploaderProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [items, setItems] = useState<ImageItem[]>(() =>
         currentImages.map((img, i) => ({ ...img, id: String(i) }))
     );
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const atLimit = items.length >= maxImages;
+
     const processFiles = useCallback((files: FileList | File[]) => {
         const arr = Array.from(files).filter(f => f.type.startsWith('image/'));
         if (arr.length === 0) return;
 
-        const readers: Promise<ImageItem>[] = arr.map(file => new Promise((resolve, reject) => {
-            if (file.size > 10 * 1024 * 1024) {
-                reject(new Error(`${file.name} 超过 10MB 限制`));
-                return;
+        // 检查是否达到限制
+        setItems(prev => {
+            const remaining = maxImages - prev.length;
+            if (remaining <= 0) {
+                alert(`当前模型最多支持 ${maxImages} 张图片`);
+                return prev;
             }
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                resolve({
-                    data: e.target?.result as string,
-                    mimeType: file.type,
-                    id: `${Date.now()}-${Math.random()}`,
-                });
-            };
-            reader.onerror = () => reject(new Error('读取失败'));
-            reader.readAsDataURL(file);
-        }));
+            const toProcess = arr.slice(0, remaining);
+            if (arr.length > remaining) {
+                alert(`已达到限制，只添加前 ${remaining} 张`);
+            }
 
-        Promise.allSettled(readers).then(results => {
-            const newItems: ImageItem[] = [];
-            results.forEach(r => {
-                if (r.status === 'fulfilled') newItems.push(r.value);
-                else alert(r.reason?.message || '上传失败');
+            const readers: Promise<ImageItem>[] = toProcess.map(file => new Promise((resolve, reject) => {
+                if (file.size > 10 * 1024 * 1024) {
+                    reject(new Error(`${file.name} 超过 10MB 限制`));
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    resolve({
+                        data: e.target?.result as string,
+                        mimeType: file.type,
+                        id: `${Date.now()}-${Math.random()}`,
+                    });
+                };
+                reader.onerror = () => reject(new Error('读取失败'));
+                reader.readAsDataURL(file);
+            }));
+
+            Promise.allSettled(readers).then(results => {
+                const newItems: ImageItem[] = [];
+                results.forEach(r => {
+                    if (r.status === 'fulfilled') newItems.push(r.value);
+                    else alert(r.reason?.message || '上传失败');
+                });
+                if (newItems.length === 0) return;
+                setItems(prevInner => {
+                    const updated = [...prevInner, ...newItems];
+                    onImagesReady(updated.map(i => ({ data: i.data, mimeType: i.mimeType })));
+                    return updated;
+                });
             });
-            if (newItems.length === 0) return;
-            setItems(prev => {
-                const updated = [...prev, ...newItems];
-                onImagesReady(updated.map(i => ({ data: i.data, mimeType: i.mimeType })));
-                return updated;
-            });
+
+            return prev; // 将在 Promise 回调中更新
         });
-    }, [onImagesReady]);
+    }, [onImagesReady, maxImages]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.length) {
@@ -98,17 +116,18 @@ export default function ImageToImageUploader({ onImagesReady, currentImages = []
 
             {/* Upload zone */}
             <div
-                onClick={() => fileInputRef.current?.click()}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
+                onClick={() => { if (!atLimit) fileInputRef.current?.click(); }}
+                onDrop={atLimit ? undefined : handleDrop}
+                onDragOver={atLimit ? undefined : handleDragOver}
+                onDragLeave={atLimit ? undefined : handleDragLeave}
                 style={{
                     padding: '20px 16px',
-                    border: `2px dashed ${isDragging ? 'var(--pro-accent)' : 'var(--pro-border)'}`,
+                    border: `2px dashed ${atLimit ? 'var(--pro-border)' : isDragging ? 'var(--pro-accent)' : 'var(--pro-border)'}`,
                     borderRadius: 12,
                     textAlign: 'center',
-                    cursor: 'pointer',
-                    background: isDragging ? 'rgba(51, 197, 255, 0.08)' : 'var(--pro-bg-secondary)',
+                    cursor: atLimit ? 'not-allowed' : 'pointer',
+                    background: atLimit ? 'var(--pro-bg-tertiary)' : isDragging ? 'rgba(51, 197, 255, 0.08)' : 'var(--pro-bg-secondary)',
+                    opacity: atLimit ? 0.5 : 1,
                     transition: 'all 0.2s ease',
                 }}
             >
@@ -126,10 +145,10 @@ export default function ImageToImageUploader({ onImagesReady, currentImages = []
                     📤
                 </div>
                 <p style={{ fontSize: 13, color: 'var(--pro-text-main)', marginBottom: 2, fontWeight: 500 }}>
-                    {items.length > 0 ? '继续添加图片' : '点击或拖拽上传图片'}
+                    {atLimit ? `已达上限 (${maxImages} 张)` : items.length > 0 ? '继续添加图片' : '点击或拖拽上传图片'}
                 </p>
                 <p style={{ fontSize: 11, color: 'var(--pro-text-dim)' }}>
-                    支持多选，JPG / PNG / WEBP，每张最大 10MB
+                    最多 {maxImages} 张，JPG / PNG / WEBP，每张最大 10MB
                 </p>
             </div>
 

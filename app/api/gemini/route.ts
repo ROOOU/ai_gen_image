@@ -74,6 +74,20 @@ export async function POST(request: Request) {
         // 检查是否有输入图片（图生图/扩图模式）
         const hasInputImages = images && Array.isArray(images) && images.length > 0;
 
+        // 各模型的最大输入图片数量限制（来自官方文档）
+        const MAX_IMAGES: Record<string, number> = {
+            'gemini-2.5-flash-image': 3,
+            'gemini-3-pro-image-preview': 14,
+        };
+        const maxImages = MAX_IMAGES[model] ?? 3;
+
+        if (hasInputImages && mode === 'img2img' && images!.length > maxImages) {
+            return NextResponse.json(
+                { success: false, error: `当前模型最多支持 ${maxImages} 张参考图片，请删减后重试` },
+                { status: 400 }
+            );
+        }
+
         if ((mode === 'img2img' || mode === 'outpaint') && !hasInputImages) {
             return NextResponse.json(
                 { success: false, error: `${mode === 'img2img' ? '图生图' : '扩图'}模式需要提供输入图片` },
@@ -103,6 +117,10 @@ export async function POST(request: Request) {
             generateConfig.imageConfig = {};
             if (aspectRatio) {
                 generateConfig.imageConfig.aspectRatio = aspectRatio;
+            }
+            // imageSize 仅 gemini-3-pro-image-preview 支持（包括图生图模式）
+            if (imageSize && model === 'gemini-3-pro-image-preview') {
+                generateConfig.imageConfig.imageSize = imageSize;
             }
         }
 

@@ -620,6 +620,7 @@ export default function Home() {
                                         <ImageToImageUploader
                                             onImagesReady={setReferenceImages}
                                             currentImages={referenceImages}
+                                            maxImages={selectedModel === 'gemini-3-pro-image-preview' ? 14 : 3}
                                         />
                                     </div>
                                 )}
