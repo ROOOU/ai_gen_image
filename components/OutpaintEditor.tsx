@@ -56,6 +56,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // 'auto' 在扩图模式中不适用，默认使用 1:1
     const activeRatio = ASPECT_RATIOS.find(r => r.id === aspectRatio) || ASPECT_RATIOS[0];
 
     // Initialize canvas based on aspect ratio

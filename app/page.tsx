@@ -64,6 +64,7 @@ const RESOLUTIONS = [
 ];
 
 const ASPECT_RATIOS = [
+    { id: 'auto', name: '自适应' },
     { id: '1:1', name: '1:1' },
     { id: '3:4', name: '3:4' },
     { id: '4:3', name: '4:3' },
@@ -111,7 +112,7 @@ export default function Home() {
     const [apiKey, setApiKey] = useState('');
     const [prompt, setPrompt] = useState('');
     const [selectedModel, setSelectedModel] = useState(MODELS[1].id);
-    const [selectedRatio, setSelectedRatio] = useState('1:1');
+    const [selectedRatio, setSelectedRatio] = useState('auto');
     const [selectedResolution, setSelectedResolution] = useState('2K');
     const [isGenerating, setIsGenerating] = useState(false);
     const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -224,7 +225,7 @@ export default function Home() {
                 mode: 'text2img',
             };
 
-            if (selectedRatio) body.aspectRatio = selectedRatio;
+            if (selectedRatio && selectedRatio !== 'auto') body.aspectRatio = selectedRatio;
 
             if (selectedModel === 'gemini-3-pro-image-preview' && selectedResolution) {
                 body.imageSize = selectedResolution;

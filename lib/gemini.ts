@@ -43,6 +43,7 @@ export const GEMINI_MODELS = [
 
 // 可用比例
 export const ASPECT_RATIOS = [
+  { id: 'auto', name: '自适应' },
   { id: '1:1', name: '1:1 (方形)' },
   { id: '2:3', name: '2:3 (竖版)' },
   { id: '3:2', name: '3:2 (横版)' },
@@ -99,7 +100,7 @@ export function createClient(apiKey: string): GoogleGenAI {
 export async function testConnection(apiKey: string): Promise<{ success: boolean; message: string }> {
   try {
     const ai = new GoogleGenAI({ apiKey });
-    
+
     // 尝试列出模型来验证 API Key
     await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
@@ -108,7 +109,7 @@ export async function testConnection(apiKey: string): Promise<{ success: boolean
         responseModalities: ['TEXT'],
       },
     });
-    
+
     return {
       success: true,
       message: 'API Key 验证成功',
