@@ -33,7 +33,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
  * - prompt: string - 提示词
  * - model: string - 模型 ID
  * - aspectRatio?: string - 图片比例
- * - imageSize?: string - 分辨率（仅 gemini-3-pro-image-preview）
+ * - imageSize?: string - 分辨率（gemini-3-pro-image-preview 和 gemini-3.1-flash-image-preview 均支持）
  * - images?: Array<{ data: string, mimeType: string }> - 参考图片（图生图/扩图模式）
  * - mode?: 'text2img' | 'img2img' | 'outpaint' - 生成模式
  * 
@@ -74,8 +74,8 @@ export async function POST(request: Request) {
         // 检查是否有输入图片（图生图/扩图模式）
         const hasInputImages = images && Array.isArray(images) && images.length > 0;
 
-        // Pro 模型最大输入图片数量限制
-        const maxImages = 14;
+        // 根据模型动态设置最大输入图片数量
+        const maxImages = model === 'gemini-3-pro-image-preview' ? 14 : 10;
 
         if (hasInputImages && mode === 'img2img' && images!.length > maxImages) {
             return NextResponse.json(
@@ -236,7 +236,7 @@ export async function GET(request: Request) {
 
         // 发送一个简单的文本请求来验证 API Key
         await ai.models.generateContent({
-            model: 'gemini-3-pro-image-preview',
+            model: 'gemini-3.1-flash-image-preview',
             contents: 'Say "OK" if you can read this.',
             config: {
                 responseModalities: ['TEXT'],

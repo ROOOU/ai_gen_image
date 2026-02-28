@@ -1,7 +1,7 @@
 /**
  * Gemini Nano Banana API Client
  * 
- * 使用 Nano Banana Pro (gemini-3-pro-image-preview)
+ * 支持 Nano Banana 2 (gemini-3.1-flash-image-preview) 和 Nano Banana Pro (gemini-3-pro-image-preview)
  * 
  * 文档: https://ai.google.dev/gemini-api/docs/image-generation
  */
@@ -25,13 +25,21 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-// 可用模型
+// 可用模型（第一个为默认模型）
 export const GEMINI_MODELS = [
+  {
+    id: 'gemini-3.1-flash-image-preview',
+    name: 'Nano Banana 2',
+    description: '性价比最佳，速度快，支持高分辨率',
+    supports4K: true,
+    maxImages: 10,
+  },
   {
     id: 'gemini-3-pro-image-preview',
     name: 'Nano Banana Pro',
-    description: '专业级质量，支持高分辨率和复杂指令',
+    description: '专业级质量，Thinking 模式，支持复杂指令',
     supports4K: true,
+    maxImages: 14,
   },
 ];
 
@@ -48,10 +56,16 @@ export const ASPECT_RATIOS = [
   { id: '9:16', name: '9:16 (手机竖屏)' },
   { id: '16:9', name: '16:9 (宽屏)' },
   { id: '21:9', name: '21:9 (超宽屏)' },
+  // Nano Banana 2 独有
+  { id: '4:1', name: '4:1 (超宽)' },
+  { id: '1:4', name: '1:4 (超长)' },
+  { id: '8:1', name: '8:1 (全景)' },
+  { id: '1:8', name: '1:8 (极长)' },
 ];
 
-// 可用分辨率（仅 Nano Banana Pro）
+// 可用分辨率（Nano Banana 2 和 Nano Banana Pro 均支持）
 export const RESOLUTIONS = [
+  { id: '512px', name: '512px' }, // 仅 Nano Banana 2
   { id: '1K', name: '1K' },
   { id: '2K', name: '2K' },
   { id: '4K', name: '4K' },
@@ -61,7 +75,7 @@ export const RESOLUTIONS = [
 export interface GenerateConfig {
   model: string;
   aspectRatio?: string;
-  imageSize?: string; // 仅 gemini-3-pro-image-preview 支持
+  imageSize?: string; // gemini-3-pro-image-preview 和 gemini-3.1-flash-image-preview 均支持
 }
 
 // 生成结果接口
@@ -97,7 +111,7 @@ export async function testConnection(apiKey: string): Promise<{ success: boolean
 
     // 尝试列出模型来验证 API Key
     await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-3.1-flash-image-preview',
       contents: 'test',
       config: {
         responseModalities: ['TEXT'],
@@ -140,8 +154,8 @@ export async function generateImage(
       if (config.aspectRatio) {
         generateConfig.imageConfig.aspectRatio = config.aspectRatio;
       }
-      // 仅 gemini-3-pro-image-preview 支持 imageSize
-      if (config.imageSize && config.model === 'gemini-3-pro-image-preview') {
+      // gemini-3-pro-image-preview 和 gemini-3.1-flash-image-preview 均支持 imageSize
+      if (config.imageSize && (config.model === 'gemini-3-pro-image-preview' || config.model === 'gemini-3.1-flash-image-preview')) {
         generateConfig.imageConfig.imageSize = config.imageSize;
       }
     }
@@ -233,7 +247,7 @@ export async function editImage(
       if (config.aspectRatio) {
         generateConfig.imageConfig.aspectRatio = config.aspectRatio;
       }
-      if (config.imageSize && config.model === 'gemini-3-pro-image-preview') {
+      if (config.imageSize && (config.model === 'gemini-3-pro-image-preview' || config.model === 'gemini-3.1-flash-image-preview')) {
         generateConfig.imageConfig.imageSize = config.imageSize;
       }
     }
