@@ -112,7 +112,7 @@ export default function ImageToImageUploader({ onImagesReady, currentImages = []
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="flex flex-col gap-3">
 
             {/* Upload zone */}
             <div
@@ -120,111 +120,56 @@ export default function ImageToImageUploader({ onImagesReady, currentImages = []
                 onDrop={atLimit ? undefined : handleDrop}
                 onDragOver={atLimit ? undefined : handleDragOver}
                 onDragLeave={atLimit ? undefined : handleDragLeave}
-                style={{
-                    padding: '20px 16px',
-                    border: `2px dashed ${atLimit ? 'var(--pro-border)' : isDragging ? 'var(--pro-accent)' : 'var(--pro-border)'}`,
-                    borderRadius: 12,
-                    textAlign: 'center',
-                    cursor: atLimit ? 'not-allowed' : 'pointer',
-                    background: atLimit ? 'var(--pro-bg-tertiary)' : isDragging ? 'rgba(51, 197, 255, 0.08)' : 'var(--pro-bg-secondary)',
-                    opacity: atLimit ? 0.5 : 1,
-                    transition: 'all 0.2s ease',
-                }}
+                className={`py-5 px-4 rounded-xl text-center transition-all duration-200 border-2 border-dashed ${atLimit
+                        ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
+                        : isDragging
+                            ? 'border-indigo-400 bg-indigo-50 cursor-pointer'
+                            : 'border-gray-200 bg-[#FAFAFA] hover:border-indigo-300 hover:bg-gray-50 cursor-pointer'
+                    }`}
             >
-                <div style={{
-                    width: 40,
-                    height: 40,
-                    margin: '0 auto 8px',
-                    borderRadius: '50%',
-                    background: 'var(--pro-bg-tertiary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 20,
-                }}>
-                    📤
+                <div className="w-10 h-10 mx-auto flex items-center justify-center bg-white rounded-full text-xl shadow-sm border border-gray-100 mb-2">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-gray-600"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
                 </div>
-                <p style={{ fontSize: 13, color: 'var(--pro-text-main)', marginBottom: 2, fontWeight: 500 }}>
-                    {atLimit ? `已达上限 (${maxImages} 张)` : items.length > 0 ? '继续添加图片' : '点击或拖拽上传图片'}
+                <p className="text-[13px] text-gray-700 font-medium mb-1">
+                    {atLimit ? `已达上限 (${maxImages} 张)` : items.length > 0 ? '继续添加 / Add more' : '点击或拖拽上传 / Upload image'}
                 </p>
-                <p style={{ fontSize: 11, color: 'var(--pro-text-dim)' }}>
-                    最多 {maxImages} 张，JPG / PNG / WEBP，每张最大 10MB
+                <p className="text-[11px] text-gray-400">
+                    Max {maxImages} images, JPG/PNG/WEBP, up to 10MB each
                 </p>
             </div>
 
             {/* Image grid */}
             {items.length > 0 && (
                 <div>
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 8,
-                    }}>
-                        <span style={{ fontSize: 12, color: 'var(--pro-text-dim)' }}>
-                            {items.length} 张图片已选
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-gray-500 font-medium">
+                            {items.length} image{items.length > 1 ? 's' : ''} selected
                         </span>
                         <button
                             onClick={clearAll}
-                            style={{
-                                fontSize: 11,
-                                color: 'var(--pro-text-dim)',
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: '2px 6px',
-                            }}
+                            className="text-[11px] text-gray-400 hover:text-gray-700 transition-colors"
                         >
-                            全部清除
+                            Clear all
                         </button>
                     </div>
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: 8,
-                    }}>
+                    <div className="grid grid-cols-3 gap-2">
                         {items.map(item => (
                             <div
                                 key={item.id}
-                                style={{
-                                    position: 'relative',
-                                    borderRadius: 8,
-                                    overflow: 'hidden',
-                                    border: '1px solid var(--pro-border)',
-                                    aspectRatio: '1',
-                                    background: 'var(--pro-bg-secondary)',
-                                }}
+                                className="relative rounded-lg overflow-hidden border border-gray-200 aspect-square bg-gray-50"
                             >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
                                     src={item.data}
                                     alt="Reference"
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        objectFit: 'cover',
-                                        display: 'block',
-                                    }}
+                                    className="w-full h-full object-cover block"
                                 />
                                 <button
-                                    onClick={() => removeImage(item.id)}
-                                    style={{
-                                        position: 'absolute',
-                                        top: 4,
-                                        right: 4,
-                                        width: 22,
-                                        height: 22,
-                                        borderRadius: '50%',
-                                        background: 'rgba(0,0,0,0.7)',
-                                        border: 'none',
-                                        color: '#fff',
-                                        fontSize: 12,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        lineHeight: 1,
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        removeImage(item.id);
                                     }}
+                                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white text-[10px] leading-none transition-colors"
                                 >
                                     ✕
                                 </button>

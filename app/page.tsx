@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { GEMINI_MODELS } from '@/lib/gemini';
 import { generateThumbnail, compressImage } from '@/lib/image';
+import ImageToImageUploader from '@/components/ImageToImageUploader';
 
 const DEFAULT_MODEL = GEMINI_MODELS[0].id;
 
@@ -34,6 +35,7 @@ export default function Home() {
     const [activeMode, setActiveMode] = useState<'text2img' | 'img2img'>('text2img');
     const [apiKey, setApiKey] = useState('');
     const [prompt, setPrompt] = useState('');
+    const [uploadedImages, setUploadedImages] = useState<Array<{ data: string; mimeType: string }>>([]);
     const [selectedModel, setSelectedModel] = useState(DEFAULT_MODEL);
     const [selectedRatio, setSelectedRatio] = useState('1:1');
     const [selectedResolution, setSelectedResolution] = useState('1K');
@@ -46,6 +48,7 @@ export default function Home() {
     const isFlashModel = selectedModel === 'gemini-3.1-flash-image-preview';
     const ASPECT_RATIOS = isFlashModel ? [...ASPECT_RATIOS_BASE, ...EXTRA_RATIOS_FLASH] : ASPECT_RATIOS_BASE;
     const RESOLUTIONS = isFlashModel ? [RESOLUTION_512, ...RESOLUTIONS_BASE] : RESOLUTIONS_BASE;
+    const maxImages = isFlashModel ? 3 : 14;
 
     useEffect(() => {
         const savedKey = localStorage.getItem('gemini_api_key');
@@ -72,6 +75,10 @@ export default function Home() {
             setError('请输入提示词 / Please enter a prompt');
             return;
         }
+        if (activeMode === 'img2img' && uploadedImages.length === 0) {
+            setError('请上传至少一张参考图 / Please upload at least one image');
+            return;
+        }
         setIsGenerating(true);
         setError(null);
         try {
@@ -84,6 +91,7 @@ export default function Home() {
                 mode: activeMode,
                 aspectRatio: selectedRatio,
                 imageSize: selectedResolution,
+                ...(activeMode === 'img2img' && { images: uploadedImages })
             };
 
             const res = await fetch('/api/gemini', {
@@ -193,6 +201,18 @@ export default function Home() {
                             />
                         </div>
 
+                        {/* Image to Image Uploader */}
+                        {activeMode === 'img2img' && (
+                            <div className="flex flex-col gap-2">
+                                <label className="text-xs font-semibold text-gray-600">Reference Images</label>
+                                <ImageToImageUploader
+                                    onImagesReady={setUploadedImages}
+                                    currentImages={uploadedImages}
+                                    maxImages={maxImages}
+                                />
+                            </div>
+                        )}
+
                         {/* Resolution */}
                         <div className="flex flex-col gap-2">
                             <label className="text-xs font-semibold text-gray-600">Resolution</label>
@@ -202,8 +222,8 @@ export default function Home() {
                                         key={r.id}
                                         onClick={() => setSelectedResolution(r.id)}
                                         className={`flex-1 py-2 text-xs font-semibold rounded-full border transition-colors ${selectedResolution === r.id
-                                                ? 'bg-[#EEF2FF] border-indigo-200 text-indigo-600'
-                                                : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                                            ? 'bg-[#EEF2FF] border-indigo-200 text-indigo-600'
+                                            : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
                                             }`}
                                     >
                                         {r.name}
@@ -221,8 +241,8 @@ export default function Home() {
                                         key={r.id}
                                         onClick={() => setSelectedRatio(r.id)}
                                         className={`py-2 text-xs font-semibold rounded-full border transition-colors ${selectedRatio === r.id
-                                                ? 'bg-[#EEF2FF] border-indigo-200 text-indigo-600'
-                                                : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                                            ? 'bg-[#EEF2FF] border-indigo-200 text-indigo-600'
+                                            : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
                                             }`}
                                     >
                                         {r.name}
@@ -236,8 +256,8 @@ export default function Home() {
                                             key={r.id}
                                             onClick={() => setSelectedRatio(r.id)}
                                             className={`py-2 text-xs font-semibold rounded-full border transition-colors ${selectedRatio === r.id
-                                                    ? 'bg-[#EEF2FF] border-indigo-200 text-indigo-600'
-                                                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                                                ? 'bg-[#EEF2FF] border-indigo-200 text-indigo-600'
+                                                : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
                                                 }`}
                                         >
                                             {r.name}
@@ -245,6 +265,25 @@ export default function Home() {
                                     ))}
                                 </div>
                             )}
+                        </div>
+
+                        {/* API Key */}
+                        <div className="flex flex-col gap-2">
+                            <label className="text-xs font-semibold text-gray-600">API Key</label>
+                            <input
+                                type="password"
+                                value={apiKey}
+                                onChange={(e) => {
+                                    setApiKey(e.target.value);
+                                    if (e.target.value) {
+                                        localStorage.setItem('gemini_api_key', e.target.value);
+                                    } else {
+                                        localStorage.removeItem('gemini_api_key');
+                                    }
+                                }}
+                                placeholder="Enter Gemini API Key (Optional if server configured)"
+                                className="w-full bg-white border border-gray-200 rounded-xl py-2.5 px-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all"
+                            />
                         </div>
 
                         <div className="mt-auto pt-4 border-t border-gray-100 flex flex-col gap-3">
