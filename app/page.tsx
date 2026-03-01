@@ -193,9 +193,17 @@ export default function Home() {
         }
     }, [apiKey, selectedHistoryItem]);
 
-    const getMimeTypeFromDataUrl = (dataUrl: string): string => {
-        const match = dataUrl.match(/^data:([^;]+);base64,/);
-        return match?.[1] || 'image/jpeg';
+    const parseApiResponse = async (res: Response) => {
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            return res.json();
+        }
+        const text = await res.text();
+        const snippet = (text || '').slice(0, 300);
+        if (res.status === 413 || snippet.toLowerCase().includes('entity too large')) {
+            return { success: false, error: '请求体过大：请换更小的参考图或减少图片数量后重试' };
+        }
+        return { success: false, error: snippet || `HTTP ${res.status}` };
     };
 
     const handleGenerate = async () => {
@@ -230,11 +238,21 @@ export default function Home() {
                 imageSize: selectedResolution,
             };
             if (activeMode === 'img2img') {
-                body.images = uploadedImages;
+                const compressed = await Promise.all(
+                    uploadedImages.map(async (img) => ({
+                        data: await compressImage(img.data, 1024, 0.82),
+                        mimeType: 'image/jpeg',
+                    }))
+                );
+                body.images = compressed;
             } else if (activeMode === 'outpaint' && outpaintComposite) {
+                const compressedComposite = await compressImage(outpaintComposite, 2048, 0.9);
                 body.images = [
-                    { data: outpaintComposite, mimeType: 'image/jpeg' },
-                    ...(outpaintOriginal ? [{ data: outpaintOriginal, mimeType: getMimeTypeFromDataUrl(outpaintOriginal) }] : []),
+                    { data: compressedComposite, mimeType: 'image/jpeg' },
+                    ...(outpaintOriginal ? [{
+                        data: await compressImage(outpaintOriginal, 1024, 0.82),
+                        mimeType: 'image/jpeg',
+                    }] : []),
                 ];
             }
 
@@ -244,7 +262,7 @@ export default function Home() {
                 body: JSON.stringify(body),
             });
 
-            const data = await res.json();
+            const data = await parseApiResponse(res);
             if (data.success) {
                 const firstImage = data.images?.[0]?.data;
                 if (firstImage) {
@@ -254,7 +272,8 @@ export default function Home() {
                     setError('未获取到生成结果');
                 }
             } else {
-                setError(data.error || 'Generate Failed');
+                const msg = typeof data.error === 'string' ? data.error : 'Generate Failed';
+                setError(msg);
             }
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Request Failed');
