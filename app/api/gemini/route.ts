@@ -74,8 +74,7 @@ export async function POST(request: Request) {
         // 检查是否有输入图片（图生图/扩图模式）
         const hasInputImages = images && Array.isArray(images) && images.length > 0;
 
-        // 根据模型动态设置最大输入图片数量
-        const maxImages = model === 'gemini-3-pro-image-preview' ? 14 : 10;
+        const maxImages = 14;
 
         if (hasInputImages && mode === 'img2img' && images!.length > maxImages) {
             return NextResponse.json(
@@ -91,33 +90,30 @@ export async function POST(request: Request) {
             );
         }
 
-        // 构建生成配置
         const generateConfig: { responseModalities: string[]; imageConfig?: { aspectRatio?: string; imageSize?: string } } = {
             responseModalities: ['TEXT', 'IMAGE'],
         };
 
-        // 设置图片配置（仅文生图模式支持 imageConfig，图生图/扩图模式不支持任何 imageConfig 参数）
-        if (!hasInputImages) {
-            const imageConfigParams: { aspectRatio?: string; imageSize?: string } = {};
-            if (aspectRatio) imageConfigParams.aspectRatio = aspectRatio;
-            if (imageSize) imageConfigParams.imageSize = imageSize;
-            if (Object.keys(imageConfigParams).length > 0) {
-                generateConfig.imageConfig = imageConfigParams;
-            }
+        const imageConfigParams: { aspectRatio?: string; imageSize?: string } = {};
+        if (aspectRatio) imageConfigParams.aspectRatio = aspectRatio;
+        if (imageSize) imageConfigParams.imageSize = imageSize;
+        if (Object.keys(imageConfigParams).length > 0) {
+            generateConfig.imageConfig = imageConfigParams;
         }
-        // 图生图/扩图模式：不传任何 imageConfig，Gemini 编辑 API 不支持该参数
 
         // 构建内容
         let contents: string | Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
 
         if (mode === 'outpaint' && hasInputImages) {
-            // 扩图模式：发送合成图（原图已放在画布上）给 Gemini
-            // Gemini 会理解画面构图并生成扩展内容
             const compositeBase64 = images[0].data.replace(/^data:[^;]+;base64,/, '');
+            const originalBase64 = images[1]?.data ? images[1].data.replace(/^data:[^;]+;base64,/, '') : null;
+            const outpaintPrompt = `${prompt}
+
+请扩展画布中未覆盖的区域，让画面向外自然延展。保持原图主体区域的内容、风格、光照和细节尽可能不变，不要改动或重绘原图主体。只补全空白/背景区域，并让边缘过渡自然。`;
 
             contents = [
                 {
-                    text: prompt,
+                    text: outpaintPrompt,
                 },
                 {
                     inlineData: {
@@ -125,6 +121,12 @@ export async function POST(request: Request) {
                         data: compositeBase64,
                     },
                 },
+                ...(originalBase64 ? [{
+                    inlineData: {
+                        mimeType: images[1].mimeType || 'image/jpeg',
+                        data: originalBase64,
+                    },
+                }] : []),
             ];
 
             console.log('[Gemini API] Outpainting mode:', {

@@ -1,5 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Icons } from './Icons';
+
+export interface OutpaintEditorHandle {
+    openFileDialog: () => void;
+    clear: () => void;
+}
 
 interface OutpaintEditorProps {
     onCompositeReady: (data: {
@@ -17,15 +22,24 @@ interface OutpaintEditorProps {
         scale: number;
     }) => void;
     aspectRatio: string;
-    onAspectRatioChange?: (id: string) => void;
+    imageSize: string;
 }
 
 const ASPECT_RATIOS = [
-    { id: '1:1', ratio: 1, name: '方形', dims: '1024 x 1024' },
-    { id: '16:9', ratio: 16 / 9, name: '16:9', dims: '1024 x 576' },
-    { id: '9:16', ratio: 9 / 16, name: '9:16', dims: '576 x 1024' },
-    { id: '4:3', ratio: 4 / 3, name: '4:3', dims: '1024 x 768' },
-    { id: '3:4', ratio: 3 / 4, name: '3:4', dims: '768 x 1024' },
+    { id: '1:1', ratio: 1, name: '1:1' },
+    { id: '4:3', ratio: 4 / 3, name: '4:3' },
+    { id: '16:9', ratio: 16 / 9, name: '16:9' },
+    { id: '3:4', ratio: 3 / 4, name: '3:4' },
+    { id: '9:16', ratio: 9 / 16, name: '9:16' },
+    { id: '3:2', ratio: 3 / 2, name: '3:2' },
+    { id: '2:3', ratio: 2 / 3, name: '2:3' },
+    { id: '5:4', ratio: 5 / 4, name: '5:4' },
+    { id: '4:5', ratio: 4 / 5, name: '4:5' },
+    { id: '21:9', ratio: 21 / 9, name: '21:9' },
+    { id: '4:1', ratio: 4, name: '4:1' },
+    { id: '1:4', ratio: 1 / 4, name: '1:4' },
+    { id: '8:1', ratio: 8, name: '8:1' },
+    { id: '1:8', ratio: 1 / 8, name: '1:8' },
 ];
 
 // Debounce helper
@@ -37,7 +51,17 @@ function debounce<T extends (...args: unknown[]) => void>(func: T, wait: number)
     }) as T;
 }
 
-export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspectRatioChange }: OutpaintEditorProps) {
+function getTargetWidth(imageSize: string): number {
+    if (imageSize === '4K') return 4096;
+    if (imageSize === '2K') return 2048;
+    if (imageSize === '512px') return 512;
+    return 1024;
+}
+
+const OutpaintEditor = forwardRef<OutpaintEditorHandle, OutpaintEditorProps>(function OutpaintEditor(
+    { onCompositeReady, aspectRatio, imageSize },
+    ref
+) {
     const [originalImage, setOriginalImage] = useState<HTMLImageElement | null>(null);
     const [originalDataUrl, setOriginalDataUrl] = useState<string>('');
     const [canvasWidth, setCanvasWidth] = useState(1024);
@@ -45,27 +69,67 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
     const [imageX, setImageX] = useState(0);
     const [imageY, setImageY] = useState(0);
     const [imageScale, setImageScale] = useState(1);
+    const [displaySize, setDisplaySize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [dragImageStart, setDragImageStart] = useState({ x: 0, y: 0 });
 
-    const containerRef = useRef<HTMLDivElement>(null);
+    const viewportRef = useRef<HTMLDivElement>(null);
     const selectionBoxRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    useImperativeHandle(ref, () => ({
+        openFileDialog: () => {
+            fileInputRef.current?.click();
+        },
+        clear: () => {
+            setOriginalImage(null);
+            setOriginalDataUrl('');
+            setImageX(0);
+            setImageY(0);
+            setImageScale(1);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        },
+    }), []);
+
     // 'auto' 在扩图模式中不适用，默认使用 1:1
     const activeRatio = ASPECT_RATIOS.find(r => r.id === aspectRatio) || ASPECT_RATIOS[0];
 
+    useEffect(() => {
+        const el = viewportRef.current;
+        if (!el) return;
+
+        const ro = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) return;
+            const { width, height } = entry.contentRect;
+            const padding = 24;
+            const availableWidth = Math.max(1, width - padding);
+            const availableHeight = Math.max(1, height - padding);
+
+            const ratio = activeRatio.ratio;
+            let w = availableWidth;
+            let h = availableWidth / ratio;
+            if (h > availableHeight) {
+                h = availableHeight;
+                w = availableHeight * ratio;
+            }
+            setDisplaySize({ width: Math.floor(w), height: Math.floor(h) });
+        });
+
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [activeRatio.ratio]);
+
     // Initialize canvas based on aspect ratio
     useEffect(() => {
-        const targetWidth = 1024;
+        const targetWidth = getTargetWidth(imageSize);
         const targetHeight = targetWidth / activeRatio.ratio;
         setCanvasWidth(Math.round(targetWidth));
         setCanvasHeight(Math.round(targetHeight));
-    }, [activeRatio]);
+    }, [activeRatio, imageSize]);
 
 
 
@@ -163,7 +227,7 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
 
         ctx.drawImage(originalImage, drawX, drawY, drawW, drawH);
 
-        const compositeData = canvas.toDataURL('image/jpeg', 0.95);
+        const compositeData = canvas.toDataURL('image/jpeg', canvasWidth >= 2048 ? 0.92 : 0.95);
 
         // Generate mask
         const maskCanvas = document.createElement('canvas');
@@ -286,152 +350,130 @@ export default function OutpaintEditor({ onCompositeReady, aspectRatio, onAspect
     }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
     return (
-        <div className="flex flex-col items-center w-full gap-4">
-            <div className="editor-canvas-container transparency-grid" ref={containerRef} onWheel={handleWheel}>
-                {/* Ratio Dropdown */}
-                <div className="ratio-dropdown">
-                    <button className="ratio-btn" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-                        <div className="ratio-icon-box">
-                            <div className="ratio-shape" style={{
-                                width: Math.min(18, 18 * (activeRatio.ratio > 1 ? 1 : activeRatio.ratio)),
-                                height: Math.min(18, 18 * (activeRatio.ratio < 1 ? 1 : 1 / activeRatio.ratio))
-                            }} />
-                        </div>
-                        <span style={{ minWidth: 40 }}>{activeRatio.id}</span>
-                        <div className={`transform transition-transform duration-200 opacity-50 ${isMenuOpen ? 'rotate-180' : ''}`}>
-                            <Icons.ChevronDown />
-                        </div>
+        <div className="w-full flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-900">画布</span>
+                    <span className="text-xs text-gray-400">{canvasWidth} x {canvasHeight}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-2 rounded-full text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    >
+                        选择图片
                     </button>
-                    {isMenuOpen && (
-                        <div className="ratio-menu">
-                            {ASPECT_RATIOS.map((r) => (
-                                <div
-                                    key={r.id}
-                                    className={`ratio-item ${r.id === aspectRatio ? 'active' : ''}`}
-                                    onClick={() => {
-                                        onAspectRatioChange?.(r.id);
-                                        setIsMenuOpen(false);
-                                    }}
-                                >
-                                    <div className="ratio-icon-box">
-                                        <div className="ratio-shape" style={{
-                                            width: Math.min(18, 18 * (r.ratio > 1 ? 1 : r.ratio)),
-                                            height: Math.min(18, 18 * (r.ratio < 1 ? 1 : 1 / r.ratio))
-                                        }} />
-                                    </div>
-                                    <div className="ratio-info">
-                                        <span className="ratio-label">{r.name}</span>
-                                        <span className="ratio-dims">{r.dims}</span>
-                                    </div>
-                                </div>
-                            ))}
+                    {originalImage && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setOriginalImage(null);
+                                setOriginalDataUrl('');
+                                setImageX(0);
+                                setImageY(0);
+                                setImageScale(1);
+                                if (fileInputRef.current) fileInputRef.current.value = '';
+                            }}
+                            className="px-3 py-2 rounded-full text-xs font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        >
+                            清除
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <div
+                ref={viewportRef}
+                className="w-full rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center select-none"
+                style={{ height: 'min(60vh, 560px)' }}
+                onWheel={handleWheel}
+            >
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+                <div
+                    ref={selectionBoxRef}
+                    className="relative overflow-hidden bg-white rounded-xl border-2 border-dashed border-gray-300 shadow-sm"
+                    style={{
+                        width: displaySize.width ? `${displaySize.width}px` : '100%',
+                        height: displaySize.height ? `${displaySize.height}px` : '100%',
+                    }}
+                >
+                    <div className="absolute top-2 left-2 z-20 px-2 py-1 rounded-md bg-white/80 backdrop-blur border border-gray-200 text-[11px] text-gray-600">
+                        {activeRatio.name}
+                    </div>
+                    {!originalImage ? (
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-500"
+                        >
+                            <Icons.Image />
+                            <span className="text-sm font-medium">点击上传图片开始扩图</span>
+                            <span className="text-xs text-gray-400">拖拽图片位置，滚轮/双指缩放</span>
+                        </button>
+                    ) : (
+                        <div className="absolute inset-0">
+                            <div
+                                onMouseDown={handleMouseDown}
+                                onTouchStart={handleTouchStart}
+                                className={`${isDragging ? 'cursor-grabbing' : 'cursor-grab'} absolute`}
+                                style={{
+                                    left: `${imageX * 100}%`,
+                                    top: `${imageY * 100}%`,
+                                    width: `${(originalImage.width * imageScale / canvasWidth) * 100}%`,
+                                    height: `${(originalImage.height * imageScale / canvasHeight) * 100}%`,
+                                    touchAction: 'none',
+                                }}
+                            >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={originalDataUrl}
+                                    alt="原图"
+                                    draggable={false}
+                                    className="w-full h-full block object-fill"
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
-
-                {!originalImage ? (
-                    <div
-                        className="outpaint-upload-card"
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        <Icons.Image />
-                        <p className="text-[var(--text-secondary)] text-sm">点击上传图片开始扩图</p>
-                        <button className="outpaint-upload-btn" type="button">选择图片</button>
-                    </div>
-                ) : (
-                    <div
-                        ref={selectionBoxRef}
-                        className="selection-box"
-                        style={{
-                            aspectRatio: activeRatio.ratio,
-                            width: activeRatio.ratio > 1 ? '90%' : 'auto',
-                            height: activeRatio.ratio > 1 ? 'auto' : '90%',
-                            position: 'relative',
-                            overflow: 'hidden'
-                        }}
-                    >
-                        {/* Hidden actual canvas for composing */}
-                        <canvas ref={canvasRef} style={{ display: 'none' }} />
-
-                        {/* Draggable Image Layer */}
-                        <div
-                            onMouseDown={handleMouseDown}
-                            onTouchStart={handleTouchStart}
-                            className={`z-10 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-                            style={{
-                                position: 'absolute',
-                                left: `${imageX * 100}%`,
-                                top: `${imageY * 100}%`,
-                                width: `${(originalImage.width * imageScale / canvasWidth) * 100}%`,
-                                height: `${(originalImage.height * imageScale / canvasHeight) * 100}%`,
-                                touchAction: 'none',
-                            }}
-                        >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src={originalDataUrl}
-                                style={{ width: '100%', height: '100%', display: 'block', objectFit: 'fill' }}
-                                alt="Original"
-                                draggable={false}
-                            />
-                        </div>
-                    </div>
-                )}
             </div>
 
-            {/* Alignment Toolbar */}
-            {
-                originalImage && (
-                    <div className="flex flex-col items-center gap-3 w-full">
-                        <div className="alignment-toolbar">
-                            <button className="toolbar-icon-btn" title="左对齐" onClick={() => alignImage('left', 'middle')}><Icons.AlignLeft /></button>
-                            <button className="toolbar-icon-btn" title="水平居中" onClick={() => alignImage('center', 'middle')}><Icons.AlignCenter /></button>
-                            <button className="toolbar-icon-btn" title="右对齐" onClick={() => alignImage('right', 'middle')}><Icons.AlignRight /></button>
-                            <div className="w-[1px] h-5 bg-[var(--border)] mx-1" />
-                            <button className="toolbar-icon-btn" title="顶对齐" onClick={() => alignImage('center', 'top')}><Icons.AlignTop /></button>
-                            <button className="toolbar-icon-btn" title="垂直居中" onClick={() => alignImage('center', 'middle')}><Icons.AlignMiddle /></button>
-                            <button className="toolbar-icon-btn" title="底对齐" onClick={() => alignImage('center', 'bottom')}><Icons.AlignBottom /></button>
-                        </div>
-
-                        <div className="flex items-center gap-3 w-full max-w-[400px] mt-2">
-                            <span className="text-xs text-[var(--text-secondary)]">缩放</span>
-                            <input
-                                type="range"
-                                min="10"
-                                max="300"
-                                value={imageScale * 100}
-                                onChange={(e) => setImageScale(Number(e.target.value) / 100)}
-                                className="flex-1 accent-[var(--accent)]"
-                            />
-                            <span className="text-xs text-[var(--text-secondary)] w-12 text-right">{Math.round(imageScale * 100)}%</span>
-                        </div>
+            {originalImage && (
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-center gap-2">
+                        <button type="button" className="w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center" onClick={() => alignImage('left', 'middle')} aria-label="左对齐"><Icons.AlignLeft /></button>
+                        <button type="button" className="w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center" onClick={() => alignImage('center', 'middle')} aria-label="水平居中"><Icons.AlignCenter /></button>
+                        <button type="button" className="w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center" onClick={() => alignImage('right', 'middle')} aria-label="右对齐"><Icons.AlignRight /></button>
+                        <div className="w-px h-6 bg-gray-200 mx-1" />
+                        <button type="button" className="w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center" onClick={() => alignImage('center', 'top')} aria-label="顶对齐"><Icons.AlignTop /></button>
+                        <button type="button" className="w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center" onClick={() => alignImage('center', 'middle')} aria-label="垂直居中"><Icons.AlignMiddle /></button>
+                        <button type="button" className="w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center" onClick={() => alignImage('center', 'bottom')} aria-label="底对齐"><Icons.AlignBottom /></button>
                     </div>
-                )
-            }
 
-            {/* Clear Image Button */}
-            {
-                originalImage && (
-                    <button
-                        onClick={() => {
-                            setOriginalImage(null);
-                            setOriginalDataUrl('');
-                            if (fileInputRef.current) fileInputRef.current.value = '';
-                        }}
-                        className="py-1.5 px-3 bg-transparent border border-[var(--border)] rounded-md text-[var(--text-secondary)] text-xs cursor-pointer"
-                    >
-                        清除图片
-                    </button>
-                )
-            }
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs font-semibold text-gray-500 w-12">缩放</span>
+                        <input
+                            type="range"
+                            min="10"
+                            max="300"
+                            value={imageScale * 100}
+                            onChange={(e) => setImageScale(Number(e.target.value) / 100)}
+                            className="flex-1 accent-indigo-600"
+                        />
+                        <span className="text-xs text-gray-500 w-12 text-right">{Math.round(imageScale * 100)}%</span>
+                    </div>
+                </div>
+            )}
 
             <input
                 type="file"
                 ref={fileInputRef}
-                style={{ display: 'none' }}
+                hidden
                 accept="image/*"
                 onChange={handleFileUpload}
             />
-        </div >
+        </div>
     );
-}
+});
+
+export default OutpaintEditor;

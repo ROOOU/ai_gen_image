@@ -32,7 +32,7 @@ export const GEMINI_MODELS = [
     name: 'Nano Banana 2',
     description: '性价比最佳，速度快，支持高分辨率',
     supports4K: true,
-    maxImages: 10,
+    maxImages: 14,
   },
   {
     id: 'gemini-3-pro-image-preview',

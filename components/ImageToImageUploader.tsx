@@ -1,78 +1,66 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 
-interface ImageItem {
+interface UploadedImage {
     data: string;
     mimeType: string;
-    id: string;
 }
 
 interface ImageToImageUploaderProps {
-    onImagesReady: (images: Array<{ data: string; mimeType: string }>) => void;
-    currentImages?: Array<{ data: string; mimeType: string }>;
+    onImagesReady: (images: UploadedImage[]) => void;
+    currentImages?: UploadedImage[];
     maxImages?: number;
 }
 
 export default function ImageToImageUploader({ onImagesReady, currentImages = [], maxImages = 3 }: ImageToImageUploaderProps) {
     const [isDragging, setIsDragging] = useState(false);
-    const [items, setItems] = useState<ImageItem[]>(() =>
-        currentImages.map((img, i) => ({ ...img, id: String(i) }))
-    );
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const atLimit = items.length >= maxImages;
+    const items = currentImages.slice(0, maxImages).map((img, i) => ({ ...img, id: String(i) }));
+    const atLimit = currentImages.length >= maxImages;
 
-    const processFiles = useCallback((files: FileList | File[]) => {
+    const processFiles = (files: FileList | File[]) => {
         const arr = Array.from(files).filter(f => f.type.startsWith('image/'));
         if (arr.length === 0) return;
 
-        // 检查是否达到限制
-        setItems(prev => {
-            const remaining = maxImages - prev.length;
-            if (remaining <= 0) {
-                alert(`当前模型最多支持 ${maxImages} 张图片`);
-                return prev;
-            }
-            const toProcess = arr.slice(0, remaining);
-            if (arr.length > remaining) {
-                alert(`已达到限制，只添加前 ${remaining} 张`);
-            }
+        const remaining = maxImages - currentImages.length;
+        if (remaining <= 0) {
+            alert(`当前模型最多支持 ${maxImages} 张图片`);
+            return;
+        }
 
-            const readers: Promise<ImageItem>[] = toProcess.map(file => new Promise((resolve, reject) => {
-                if (file.size > 10 * 1024 * 1024) {
-                    reject(new Error(`${file.name} 超过 10MB 限制`));
-                    return;
-                }
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    resolve({
-                        data: e.target?.result as string,
-                        mimeType: file.type,
-                        id: `${Date.now()}-${Math.random()}`,
-                    });
-                };
-                reader.onerror = () => reject(new Error('读取失败'));
-                reader.readAsDataURL(file);
-            }));
+        const toProcess = arr.slice(0, remaining);
+        if (arr.length > remaining) {
+            alert(`已达到限制，只添加前 ${remaining} 张`);
+        }
 
-            Promise.allSettled(readers).then(results => {
-                const newItems: ImageItem[] = [];
-                results.forEach(r => {
-                    if (r.status === 'fulfilled') newItems.push(r.value);
-                    else alert(r.reason?.message || '上传失败');
+        const readers: Promise<UploadedImage>[] = toProcess.map(file => new Promise((resolve, reject) => {
+            if (file.size > 10 * 1024 * 1024) {
+                reject(new Error(`${file.name} 超过 10MB 限制`));
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                resolve({
+                    data: e.target?.result as string,
+                    mimeType: file.type,
                 });
-                if (newItems.length === 0) return;
-                setItems(prevInner => {
-                    const updated = [...prevInner, ...newItems];
-                    onImagesReady(updated.map(i => ({ data: i.data, mimeType: i.mimeType })));
-                    return updated;
-                });
+            };
+            reader.onerror = () => reject(new Error('读取失败'));
+            reader.readAsDataURL(file);
+        }));
+
+        Promise.allSettled(readers).then(results => {
+            const newImages: UploadedImage[] = [];
+            results.forEach(r => {
+                if (r.status === 'fulfilled') newImages.push(r.value);
+                else alert(r.reason?.message || '上传失败');
             });
-
-            return prev; // 将在 Promise 回调中更新
+            if (newImages.length === 0) return;
+            onImagesReady([...currentImages, ...newImages].slice(0, maxImages));
         });
-    }, [onImagesReady, maxImages]);
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.length) {
@@ -81,32 +69,27 @@ export default function ImageToImageUploader({ onImagesReady, currentImages = []
         }
     };
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
+    const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
         if (e.dataTransfer.files.length) processFiles(e.dataTransfer.files);
-    }, [processFiles]);
+    };
 
-    const handleDragOver = useCallback((e: React.DragEvent) => {
+    const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(true);
-    }, []);
+    };
 
-    const handleDragLeave = useCallback((e: React.DragEvent) => {
+    const handleDragLeave = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-    }, []);
+    };
 
-    const removeImage = (id: string) => {
-        setItems(prev => {
-            const updated = prev.filter(i => i.id !== id);
-            onImagesReady(updated.map(i => ({ data: i.data, mimeType: i.mimeType })));
-            return updated;
-        });
+    const removeImage = (index: number) => {
+        onImagesReady(currentImages.filter((_, i) => i !== index));
     };
 
     const clearAll = () => {
-        setItems([]);
         onImagesReady([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
@@ -146,6 +129,7 @@ export default function ImageToImageUploader({ onImagesReady, currentImages = []
                             {items.length} image{items.length > 1 ? 's' : ''} selected
                         </span>
                         <button
+                            type="button"
                             onClick={clearAll}
                             className="text-[11px] text-gray-400 hover:text-gray-700 transition-colors"
                         >
@@ -153,7 +137,7 @@ export default function ImageToImageUploader({ onImagesReady, currentImages = []
                         </button>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                        {items.map(item => (
+                        {items.map((item, idx) => (
                             <div
                                 key={item.id}
                                 className="relative rounded-lg overflow-hidden border border-gray-200 aspect-square bg-gray-50"
@@ -165,9 +149,10 @@ export default function ImageToImageUploader({ onImagesReady, currentImages = []
                                     className="w-full h-full object-cover block"
                                 />
                                 <button
+                                    type="button"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        removeImage(item.id);
+                                        removeImage(idx);
                                     }}
                                     className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white text-[10px] leading-none transition-colors"
                                 >
